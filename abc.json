@@ -1,0 +1,15 @@
+{
+  "providerProfiles": {
+    "currentApiConfigName": "AgentRouter",
+    "apiConfigs": {
+      "AgentRouter": {
+        "provider": "openai-compatible",
+        "openAiCompatible": {
+          "baseUrl": "https://agentrouter.org/v1",
+          "apiKey": "sk-JOBUG3dQb9UshSskxRemVBdxqVLQ7wSdXdaLw41eup3XLrlc",
+          "model": "deepseek-v4-flash"
+        }
+      }
+    }
+  }
+}
