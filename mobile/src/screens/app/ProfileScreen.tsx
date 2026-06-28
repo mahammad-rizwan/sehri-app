@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS, SIZES, ZONE_CONFIG } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
@@ -107,6 +108,20 @@ export default function ProfileScreen() {
           />
         )}
 
+        {/* Poll History */}
+        <PremiumCard style={styles.card}>
+          <TouchableOpacity onPress={() => router.push('/(app)/poll-history')} style={styles.pollHistoryRow} activeOpacity={0.7}>
+            <View style={styles.pollHistoryIcon}>
+              <Text style={{ fontSize: 22 }}>📅</Text>
+            </View>
+            <View style={styles.pollHistoryInfo}>
+              <Text style={styles.cardTitle}>Poll History</Text>
+              <Text style={styles.pollHistorySub}>View your past Sehri responses</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
+        </PremiumCard>
+
         {/* Islamic Quote */}
         <LinearGradient
           colors={['rgba(201,168,76,0.12)', 'rgba(201,168,76,0.03)']}
@@ -133,7 +148,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: SIZES.spacing.xl, paddingTop: 20, paddingBottom: 60 },
+  scroll: { paddingHorizontal: SIZES.spacing.xl, paddingTop: 4, paddingBottom: 60 },
   topSpacer: { height: 60 },
   profileHeader: { alignItems: 'center', marginBottom: SIZES.spacing.xl, marginTop: SIZES.spacing.md },
   initialCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: SIZES.spacing.md, backgroundColor: COLORS.primary, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
@@ -157,4 +172,8 @@ const styles = StyleSheet.create({
   quoteSource: { color: COLORS.primary, fontSize: SIZES.xs, textAlign: 'right', marginTop: 6 },
   switchBtn: { marginTop: SIZES.spacing.md },
   logoutBtn: { marginTop: SIZES.spacing.md, borderColor: COLORS.accentRed },
+  pollHistoryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pollHistoryIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(171,71,188,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(171,71,188,0.35)' },
+  pollHistoryInfo: { flex: 1 },
+  pollHistorySub: { color: COLORS.textMuted, fontSize: SIZES.xs, marginTop: 2 },
 });

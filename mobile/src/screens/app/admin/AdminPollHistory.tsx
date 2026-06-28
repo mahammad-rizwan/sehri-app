@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Modal,
@@ -6,7 +6,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS, SIZES, ZONE_CONFIG } from '../../../constants/theme';
+
+import { COLORS, ZONE_CONFIG } from '../../../constants/theme';
 import { useAuthStore } from '../../../store/authStore';
 import api from '../../../services/api';
 import { ENDPOINTS } from '../../../constants/api';
@@ -16,8 +17,8 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const ZONE_KEYS = ['masjid', 'boys_hostel', 'stanza', 'girls'] as const;
 
 export default function AdminPollHistory() {
-  const { user } = useAuthStore();
   const router = useRouter();
+  const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'super_admin';
   const [loading, setLoading] = useState(true);
   const [pollDates, setPollDates] = useState<string[]>([]);
@@ -160,17 +161,11 @@ export default function AdminPollHistory() {
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header with back */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerTitle}>Poll History</Text>
-            <Text style={styles.headerSub}>
-              {isSuperAdmin ? 'View all zones' : 'View your zone'}
-            </Text>
-          </View>
+          <Text style={styles.headerTitle}>Poll History</Text>
+          <Text style={styles.headerSub}>
+            {isSuperAdmin ? 'View all zones' : 'View your zone'}
+          </Text>
         </View>
 
         {loading ? (
@@ -313,25 +308,13 @@ export default function AdminPollHistory() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    paddingTop: 60,
+    paddingTop: 16,
     paddingBottom: 24,
     paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.backgroundElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  headerTitle: { color: COLORS.textPrimary, fontSize: 22, fontWeight: '800' },
-  headerSub: { color: COLORS.textSecondary, fontSize: 12, marginTop: 2 },
+
+  headerTitle: { color: COLORS.textPrimary, fontSize: 26, fontWeight: '800' },
+  headerSub: { color: COLORS.textSecondary, fontSize: 13, marginTop: 4 },
   loadingBox: { alignItems: 'center', paddingVertical: 80 },
   calendarCard: {
     marginHorizontal: 16,

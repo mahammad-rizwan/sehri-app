@@ -17,6 +17,7 @@ const donationRoutes = require('./routes/donations');
 
 const feedbackRoutes = require('./routes/feedback');
 const trackingRoutes = require('./routes/tracking');
+const chatRoutes = require('./routes/chat');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -57,6 +58,7 @@ app.use('/api/polls', pollRoutes);
 app.use('/api/donations', donationRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/tracking', trackingRoutes);
+app.use('/api/chat', chatRoutes);
 
 // ─────────────── 404 Handler ───────────────
 app.use((req, res) => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Alert, ScrollView,
+  Alert, ScrollView, BackHandler,
 } from 'react-native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { COLORS, SIZES } from '../../src/constants/theme';
+import { COLORS, SIZES, RESPONSIVE } from '../../src/constants/theme';
 import { API_BASE_URL } from '../../src/constants/api';
 
 const LOCATION_TASK_NAME = 'sehri-rider-broadcast';
@@ -61,6 +61,15 @@ export default function BroadcastScreen() {
     return () => {
       stopLocationUpdates();
     };
+  }, []);
+
+  // Override hardware back to go home
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.replace('/(app)/home');
+      return true;
+    });
+    return () => sub.remove();
   }, []);
 
   const stopLocationUpdates = async () => {
@@ -179,13 +188,25 @@ export default function BroadcastScreen() {
   };
 
   // ── Logout ────────────────────────────────────────────────────
-  const logout = async () => {
-    await stopTracking();
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
-    await SecureStore.deleteItemAsync('userRole');
-    await SecureStore.deleteItemAsync('riderId');
-    router.replace('/(auth)/welcome');
+  const logout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout', style: 'destructive',
+          onPress: async () => {
+            await stopTracking();
+            await SecureStore.deleteItemAsync('accessToken');
+            await SecureStore.deleteItemAsync('refreshToken');
+            await SecureStore.deleteItemAsync('userRole');
+            await SecureStore.deleteItemAsync('riderId');
+            router.replace('/(auth)/welcome');
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -299,16 +320,18 @@ export default function BroadcastScreen() {
 
 const st = StyleSheet.create({
   root:   { flex: 1 },
-  scroll: { padding: SIZES.spacing.xl, paddingTop: 64, paddingBottom: 80 },
+  scroll: { padding: RESPONSIVE.isSmall ? 12 : SIZES.spacing.xl, paddingTop: RESPONSIVE.isSmall ? 52 : 64, paddingBottom: 80 },
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     marginBottom: SIZES.spacing.xl,
   },
-  title:  { color: COLORS.textPrimary, fontSize: SIZES.xl, fontWeight: '800' },
-  sub:    { color: COLORS.textSecondary, fontSize: SIZES.sm, marginTop: 2 },
+  title:  { color: COLORS.textPrimary, fontSize: RESPONSIVE.isSmall ? 18 : SIZES.xl, fontWeight: '800' },
+  sub:    { color: COLORS.textSecondary, fontSize: RESPONSIVE.isSmall ? 11 : SIZES.sm, marginTop: 2 },
   logoutBtn: {
-    width: 36, height: 36, borderRadius: 18,
+    width: RESPONSIVE.isSmall ? 32 : 36,
+    height: RESPONSIVE.isSmall ? 32 : 36,
+    borderRadius: RESPONSIVE.isSmall ? 16 : 18,
     backgroundColor: 'rgba(239,83,80,0.12)',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: 'rgba(239,83,80,0.3)',

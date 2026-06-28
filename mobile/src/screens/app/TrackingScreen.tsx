@@ -147,7 +147,7 @@ const st = StyleSheet.create({
 
   header: {
     position: 'absolute', top: 0, left: 0, right: 0,
-    paddingTop: 56, paddingBottom: 40,
+    paddingTop: 12, paddingBottom: 40,
     paddingHorizontal: SIZES.spacing.xl,
   },
   headerTitle: { color: '#fff', fontSize: SIZES.xl, fontWeight: '800' },

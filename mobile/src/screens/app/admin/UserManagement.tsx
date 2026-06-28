@@ -344,7 +344,7 @@ export default function UserManagement() {
 const u = StyleSheet.create({
   container: { flex: 1 },
   // Header
-  header: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 10 },
+  header: { paddingTop: 12, paddingHorizontal: 20, paddingBottom: 10 },
   title: { color: '#F0E6C8', fontSize: 22, fontWeight: '800' },
   zoneTag: { color: '#C9A84C', fontSize: 13, fontWeight: '600', marginTop: 2 },
   // Search bar

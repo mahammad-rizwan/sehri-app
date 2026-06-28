@@ -146,7 +146,7 @@ export default function FeedbackScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { padding: SIZES.spacing.xl, paddingTop: 60, paddingBottom: 40 },
+  scroll: { padding: SIZES.spacing.xl, paddingTop: 16, paddingBottom: 40 },
   header: { alignItems: 'center', marginBottom: SIZES.spacing.xl },
   headerEmoji: { fontSize: 48, marginBottom: SIZES.spacing.sm },
   title: { color: COLORS.textPrimary, fontSize: SIZES.xxl, fontWeight: '700' },

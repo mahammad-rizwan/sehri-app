@@ -67,4 +67,16 @@ export const ENDPOINTS = {
   RIDER_LOGIN: '/tracking/rider-login',
   PUSH_LOCATION: (id: string) => `/tracking/${id}/push-location`,
   DELETE_RIDER: (id: string) => `/tracking/${id}`,
+
+  // Chat
+  CHAT_GROUPS: '/chat/groups',
+  CHAT_GROUP_DETAIL: (id: string) => `/chat/groups/${id}`,
+  CHAT_GROUP_MEMBERS: (id: string) => `/chat/groups/${id}/members`,
+  CHAT_GROUP_MEMBER_DELETE: (groupId: string, userId: string) => `/chat/groups/${groupId}/members/${userId}`,
+  CHAT_GROUP_MESSAGES: (id: string) => `/chat/groups/${id}/messages`,
+  CHAT_SEND_MESSAGE: (id: string) => `/chat/groups/${id}/messages`,
+  CHAT_DELETE_MESSAGE: (groupId: string, msgId: string) => `/chat/groups/${groupId}/messages/${msgId}`,
+  CHAT_ADMINS: '/chat/admins',
+  CHAT_DELETE_GROUP: (id: string) => `/chat/groups/${id}`,
+  CHAT_MARK_READ: (id: string) => `/chat/groups/${id}/read`,
 };

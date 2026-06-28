@@ -97,7 +97,7 @@ export default function AdminFeedback() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: SIZES.spacing.xl, paddingBottom: SIZES.spacing.md },
+  header: { paddingTop: 16, paddingHorizontal: SIZES.spacing.xl, paddingBottom: SIZES.spacing.md },
   title: { color: COLORS.textPrimary, fontSize: SIZES.xl, fontWeight: '700', marginBottom: SIZES.spacing.md },
   filterRow: { flexDirection: 'row', gap: 8 },
   chip: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: SIZES.radius.full, borderWidth: 1, borderColor: COLORS.border },

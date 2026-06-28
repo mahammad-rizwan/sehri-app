@@ -4,7 +4,7 @@ import {
   TextInput, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+
 import { COLORS, SIZES, ZONE_CONFIG } from '../../../constants/theme';
 import { useAuthStore } from '../../../store/authStore';
 import PremiumCard from '../../../components/ui/PremiumCard';
@@ -24,7 +24,6 @@ interface AdminUser {
 
 export default function ManageAdmins() {
   const { user } = useAuthStore();
-  const router = useRouter();
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState<'admin' | 'super_admin' | null>(null);
@@ -101,11 +100,7 @@ export default function ManageAdmins() {
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
           <Text style={styles.title}>Manage Admins</Text>
           <Text style={styles.subtitle}>
             {isSuperAdmin ? 'Create and manage admin accounts' : 'View admin accounts'}
@@ -216,7 +211,7 @@ export default function ManageAdmins() {
                     style={styles.deleteBtn}
                     onPress={() => handleDelete(admin)}
                   >
-                    <Text style={styles.deleteText}>Del</Text>
+                    <Text style={styles.deleteText}>🗑️</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -234,10 +229,8 @@ export default function ManageAdmins() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: SIZES.spacing.xl, paddingTop: 60, paddingBottom: 60 },
+  scroll: { paddingHorizontal: SIZES.spacing.xl, paddingTop: 16, paddingBottom: 60 },
   header: { marginBottom: SIZES.spacing.xl },
-  backBtn: { marginBottom: SIZES.spacing.md },
-  backText: { color: COLORS.primary, fontSize: SIZES.base },
   title: { color: COLORS.textPrimary, fontSize: SIZES.xxl, fontWeight: '800' },
   subtitle: { color: COLORS.textSecondary, fontSize: SIZES.sm, marginTop: 4 },
   createActions: { flexDirection: 'row', gap: 10, marginBottom: SIZES.spacing.xl },

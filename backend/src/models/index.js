@@ -8,6 +8,9 @@ const Donation = require('./Donation');
 const Feedback = require('./Feedback');
 const Tracking = require('./Tracking');
 const ProfileEditRequest = require('./ProfileEditRequest');
+const ChatGroup = require('./ChatGroup');
+const ChatGroupMember = require('./ChatGroupMember');
+const ChatMessage = require('./ChatMessage');
 
 // Associations — regular users have poll responses, donations, feedback, profile edits
 User.hasMany(PollResponse, { foreignKey: 'user_id' });
@@ -25,6 +28,13 @@ Feedback.belongsTo(User, { foreignKey: 'user_id' });
 User.hasMany(ProfileEditRequest, { foreignKey: 'user_id' });
 ProfileEditRequest.belongsTo(User, { foreignKey: 'user_id' });
 
+// Chat associations
+ChatGroup.hasMany(ChatGroupMember, { foreignKey: 'group_id', onDelete: 'CASCADE' });
+ChatGroupMember.belongsTo(ChatGroup, { foreignKey: 'group_id' });
+
+ChatGroup.hasMany(ChatMessage, { foreignKey: 'group_id', onDelete: 'CASCADE' });
+ChatMessage.belongsTo(ChatGroup, { foreignKey: 'group_id' });
+
 module.exports = {
   User,
   Admin,
@@ -36,4 +46,7 @@ module.exports = {
   Feedback,
   Tracking,
   ProfileEditRequest,
+  ChatGroup,
+  ChatGroupMember,
+  ChatMessage,
 };

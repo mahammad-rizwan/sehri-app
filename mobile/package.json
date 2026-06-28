@@ -5,8 +5,8 @@
   "scripts": {
     "start": "expo start",
     "start:offline": "expo start --offline --clear",
-    "android": "expo start --android",
-    "ios": "expo start --ios"
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.4",

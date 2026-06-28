@@ -5,6 +5,9 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { WebView } from 'react-native-webview';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 import GoldButton from '../../components/ui/GoldButton';
 import PremiumCard from '../../components/ui/PremiumCard';
@@ -16,6 +19,8 @@ import Toast from 'react-native-toast-message';
 const PRESET_AMOUNTS = [50, 100, 200, 500, 1000, 2000];
 
 export default function DonationScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   const [amount, setAmount] = useState('');
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null);
@@ -80,7 +85,7 @@ export default function DonationScreen() {
           razorpay_signature: data.razorpay_signature,
         });
         setPaymentUrl(null);
-        Toast.show({ type: 'success', text1: 'JazakAllahu Khayran! 🤲', text2: 'Your donation has been received.' });
+        Toast.show({ type: 'success', text1: 'JazakAllahu Khayran! 🎁', text2: 'Your donation has been received.' });
         setAmount(''); setSelectedPreset(null); setMessage(''); setIsAnonymous(false);
       } else if (data.type === 'payment_failed') {
         setPaymentUrl(null);
@@ -114,11 +119,19 @@ export default function DonationScreen() {
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={styles.container}>
+      <View style={[styles.topBar, { paddingTop: insets.top, height: insets.top + (Platform.OS === 'ios' ? 44 : 56) }]}>
+        <View style={styles.topBarContent}>
+          <TouchableOpacity onPress={() => router.push('/(app)/home' as any)} style={styles.backBtn} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
+            <Text style={styles.backBtnText}>Home</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerEmoji}>🤲</Text>
+            <Text style={styles.headerEmoji}>🎁</Text>
             <Text style={styles.title}>Make a Donation</Text>
             <Text style={styles.subtitle}>Support Sehri food distribution</Text>
           </View>
@@ -262,7 +275,20 @@ function buildRazorpayHtml({ key, orderId, amount, currency, name, phone, descri
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { padding: SIZES.spacing.xl, paddingTop: 60, paddingBottom: 40 },
+  topBar: {
+    justifyContent: 'flex-end',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  topBarContent: {
+    flexDirection: 'row', alignItems: 'center',
+    height: Platform.OS === 'ios' ? 44 : 56,
+    paddingHorizontal: 4,
+  },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  backBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '500' },
+  scroll: { padding: SIZES.spacing.xl, paddingTop: 16, paddingBottom: 40 },
   header: { alignItems: 'center', marginBottom: SIZES.spacing.xl },
   headerEmoji: { fontSize: 48, marginBottom: SIZES.spacing.sm },
   title: { color: COLORS.textPrimary, fontSize: SIZES.xxl, fontWeight: '700' },
@@ -295,7 +321,7 @@ const styles = StyleSheet.create({
   donateBtn: { width: '100%', marginTop: SIZES.spacing.sm },
   secureNote: { color: COLORS.textMuted, fontSize: SIZES.xs, textAlign: 'center', marginTop: SIZES.spacing.md },
   webviewContainer: { flex: 1, backgroundColor: COLORS.background },
-  webviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SIZES.spacing.base, paddingTop: 60, backgroundColor: COLORS.backgroundCard, borderBottomWidth: 1, borderColor: COLORS.border },
+  webviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: SIZES.spacing.base, paddingTop: 16, backgroundColor: COLORS.backgroundCard, borderBottomWidth: 1, borderColor: COLORS.border },
   cancelText: { color: COLORS.accentRed, fontSize: SIZES.base },
   webviewTitle: { color: COLORS.textPrimary, fontSize: SIZES.base, fontWeight: '600' },
   webview: { flex: 1 },

@@ -288,7 +288,119 @@ const migrate = async () => {
       logger.warn('⚠️ Could not migrate super_admin data:', err.message);
     }
 
-    // 15. Drop role column from users table (if it exists)
+    // 15. Create chat tables
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`chat_groups\` (
+          \`id\` CHAR(36) BINARY NOT NULL,
+          \`name\` VARCHAR(200) NOT NULL,
+          \`created_by\` CHAR(36) BINARY NOT NULL COMMENT 'Super admin who created this group',
+          \`created_at\` DATETIME NOT NULL,
+          \`updated_at\` DATETIME NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+      logger.info('✅ Created chat_groups table');
+    } catch (err) {
+      if (err.parent?.code === 'ER_TABLE_EXISTS_ERROR') {
+        logger.info('ℹ️ chat_groups table already exists');
+      } else throw err;
+    }
+
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`chat_group_members\` (
+          \`id\` CHAR(36) BINARY NOT NULL,
+          \`group_id\` CHAR(36) BINARY NOT NULL,
+          \`user_id\` CHAR(36) BINARY NOT NULL,
+          \`user_type\` ENUM('super_admin','admin','user') NOT NULL,
+          \`name\` VARCHAR(100) NOT NULL,
+          \`created_at\` DATETIME NOT NULL,
+          \`updated_at\` DATETIME NOT NULL,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`uq_group_member\` (\`group_id\`,\`user_id\`,\`user_type\`),
+          KEY \`idx_member_user\` (\`user_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+      logger.info('✅ Created chat_group_members table');
+    } catch (err) {
+      if (err.parent?.code === 'ER_TABLE_EXISTS_ERROR') {
+        logger.info('ℹ️ chat_group_members table already exists');
+      } else throw err;
+    }
+
+    try {
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS \`chat_messages\` (
+          \`id\` CHAR(36) BINARY NOT NULL,
+          \`group_id\` CHAR(36) BINARY NOT NULL,
+          \`sender_id\` CHAR(36) BINARY NOT NULL,
+          \`sender_name\` VARCHAR(100) NOT NULL,
+          \`sender_type\` ENUM('super_admin','admin','user') NOT NULL,
+          \`message\` TEXT NOT NULL,
+          \`created_at\` DATETIME NOT NULL,
+          \`updated_at\` DATETIME NOT NULL,
+          PRIMARY KEY (\`id\`),
+          KEY \`idx_message_group\` (\`group_id\`),
+          KEY \`idx_message_created\` (\`created_at\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+      `);
+      logger.info('✅ Created chat_messages table');
+    } catch (err) {
+      if (err.parent?.code === 'ER_TABLE_EXISTS_ERROR') {
+        logger.info('ℹ️ chat_messages table already exists');
+      } else throw err;
+    }
+
+    // 16. Add reply_to columns to chat_messages
+    try {
+      await queryInterface.addColumn('chat_messages', 'reply_to_id', {
+        type: DataTypes.UUID,
+        allowNull: true,
+      });
+      logger.info('✅ Added reply_to_id to chat_messages');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ reply_to_id already exists');
+      } else throw err;
+    }
+    try {
+      await queryInterface.addColumn('chat_messages', 'reply_to_message', {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      });
+      logger.info('✅ Added reply_to_message to chat_messages');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ reply_to_message already exists');
+      } else throw err;
+    }
+    try {
+      await queryInterface.addColumn('chat_messages', 'reply_to_sender', {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+      });
+      logger.info('✅ Added reply_to_sender to chat_messages');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ reply_to_sender already exists');
+      } else throw err;
+    }
+
+    // 17. Add last_read_at to chat_group_members
+    try {
+      await queryInterface.addColumn('chat_group_members', 'last_read_at', {
+        type: DataTypes.DATE,
+        allowNull: true,
+      });
+      logger.info('✅ Added last_read_at to chat_group_members');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ last_read_at already exists');
+      } else throw err;
+    }
+
+    // 18. Drop role column from users table (if it exists)
     try {
       await queryInterface.removeColumn('users', 'role');
       logger.info('✅ Dropped role column from users table');

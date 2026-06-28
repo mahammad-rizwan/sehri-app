@@ -4,12 +4,42 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SIZES } from '../../constants/theme';
+import { COLORS } from '../../constants/theme';
 import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const HIJRI_MONTHS = [
+  'Muharram', 'Safar', "Rabi' al-Awwal", "Rabi' al-Thani",
+  'Jumada al-Ula', 'Jumada al-Akhira', 'Rajab', "Sha'ban",
+  'Ramadan', 'Shawwal', "Dhu al-Qi'dah", 'Dhu al-Hijjah',
+];
+
+function gregorianToHijri(date: Date): { day: number; month: number; year: number } {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const a = Math.floor((14 - m) / 12);
+  const yy = y + 4800 - a;
+  const mm = m + 12 * a - 3;
+  const jd = d + Math.floor((153 * mm + 2) / 5) + 365 * yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) - 32045;
+  const l = jd - 1948440 + 10632;
+  const n = Math.floor((l - 1) / 10631);
+  const l2 = l - 10631 * n + 354;
+  const j = Math.floor((10985 - l2) / 5316) * Math.floor((50 * l2) / 17719) + Math.floor(l2 / 5670) * Math.floor((43 * l2) / 15238);
+  const l3 = l2 - Math.floor((30 - j) / 15) * Math.floor((17719 * j) / 50) - Math.floor(j / 16) * Math.floor((15238 * j) / 43) + 29;
+  const mh = Math.floor((24 * l3) / 709);
+  const dh = l3 - Math.floor((709 * mh) / 24);
+  const yh = 30 * n + j - 30;
+  return { day: dh, month: mh, year: yh };
+}
+
+function getHijriDateLabel(date: Date): { day: number; month: number; year: number; monthName: string } {
+  const h = gregorianToHijri(date);
+  return { ...h, monthName: HIJRI_MONTHS[h.month - 1] || '' };
+}
 
 export default function PollHistoryScreen() {
   const [loading, setLoading] = useState(true);
@@ -32,6 +62,11 @@ export default function PollHistoryScreen() {
   const month = viewDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const firstHijri = getHijriDateLabel(new Date(year, month, 1));
+  const lastHijri = getHijriDateLabel(new Date(year, month, daysInMonth));
+  const hijriLabel = firstHijri.month === lastHijri.month && firstHijri.year === lastHijri.year
+    ? `${firstHijri.monthName} ${firstHijri.year} AH`
+    : `${firstHijri.monthName} ${firstHijri.year} - ${lastHijri.monthName} ${lastHijri.year} AH`;
 
   const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
@@ -54,7 +89,6 @@ export default function PollHistoryScreen() {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const hasPoll = pollDateSet.has(dateStr);
     if (!hasPoll) return null;
-
     const response = responseMap[dateStr];
     if (response === 'yes') return 'green';
     return 'red';
@@ -66,6 +100,8 @@ export default function PollHistoryScreen() {
   }
   for (let d = 1; d <= daysInMonth; d++) {
     const color = getDayColor(d);
+    const dateObj = new Date(year, month, d);
+    const hijri = gregorianToHijri(dateObj);
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const isToday = dateStr === todayStr;
     cells.push(
@@ -88,6 +124,7 @@ export default function PollHistoryScreen() {
           >
             {d}
           </Text>
+          <Text style={styles.hijriDayText}>{hijri.day}</Text>
         </View>
       </View>,
     );
@@ -96,7 +133,6 @@ export default function PollHistoryScreen() {
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>My Poll History</Text>
           <Text style={styles.headerSub}>Track your Sehri responses</Text>
@@ -108,14 +144,19 @@ export default function PollHistoryScreen() {
           </View>
         ) : (
           <View style={styles.calendarCard}>
-            {/* Month navigation */}
+            {/* Month navigation with Hijri */}
             <View style={styles.monthNav}>
               <TouchableOpacity onPress={prevMonth} style={styles.navBtn}>
                 <Ionicons name="chevron-back" size={20} color={COLORS.textPrimary} />
               </TouchableOpacity>
-              <Text style={styles.monthLabel}>
-                {MONTHS[month]} {year}
-              </Text>
+              <View style={styles.monthCenter}>
+                <Text style={styles.monthLabel}>
+                  {MONTHS[month]} {year}
+                </Text>
+                <Text style={styles.hijriMonthLabel}>
+                  {hijriLabel}
+                </Text>
+              </View>
               <TouchableOpacity onPress={nextMonth} style={styles.navBtn}>
                 <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
               </TouchableOpacity>
@@ -207,7 +248,7 @@ export default function PollHistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 20 },
+  header: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 20 },
   headerTitle: { color: COLORS.textPrimary, fontSize: 26, fontWeight: '800' },
   headerSub: { color: COLORS.textSecondary, fontSize: 13, marginTop: 4 },
   loadingBox: { alignItems: 'center', paddingVertical: 80 },
@@ -235,7 +276,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  monthCenter: { alignItems: 'center' },
   monthLabel: { color: COLORS.textPrimary, fontSize: 17, fontWeight: '700' },
+  hijriMonthLabel: { color: COLORS.primary, fontSize: 11, fontWeight: '600', marginTop: 2 },
   weekRow: { flexDirection: 'row', marginBottom: 8 },
   weekCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   weekText: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
@@ -247,6 +290,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   dayGreen: { backgroundColor: 'rgba(46,125,50,0.35)' },
   dayRed: { backgroundColor: 'rgba(198,40,40,0.35)' },
@@ -255,12 +299,13 @@ const styles = StyleSheet.create({
   dayTextGreen: { color: '#81C784' },
   dayTextRed: { color: '#EF9A9A' },
   dayTextToday: { color: COLORS.primary, fontWeight: '800' },
+  hijriDayText: { color: COLORS.textMuted, fontSize: 8, marginTop: 1 },
   legend: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 16,
-    marginTop: 16,
-    paddingTop: 12,
+    marginTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
