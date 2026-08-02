@@ -26,6 +26,7 @@ const PUSH_INTERVAL_MS = 5000; // push GPS every 5 seconds
 export default function RiderScreen() {
   const [riderId, setRiderId]       = useState('');
   const [isTracking, setIsTracking] = useState(false);
+  const [startingUp, setStartingUp] = useState(false);
   const [status, setStatus]         = useState<'idle' | 'delivering' | 'completed'>('delivering');
   const [eta, setEta]               = useState('');
   const [address, setAddress]       = useState('');
@@ -39,11 +40,26 @@ export default function RiderScreen() {
   }, []);
 
   const requestPermission = async (): Promise<boolean> => {
+    // First check if location services are enabled on device
+    const providerEnabled = await Location.hasServicesEnabledAsync();
+    if (!providerEnabled) {
+      Alert.alert(
+        'Location Services Disabled',
+        'Please enable Location/GPS on your device from Settings, then try again.',
+        [{ text: 'OK' }],
+      );
+      return false;
+    }
+
+    const { status: existing } = await Location.getForegroundPermissionsAsync();
+    if (existing === 'granted') return true;
+
     const { status: s } = await Location.requestForegroundPermissionsAsync();
     if (s !== 'granted') {
       Alert.alert(
         'Location Permission Required',
         'Please allow location access so users can track your delivery.',
+        [{ text: 'OK' }],
       );
       return false;
     }
@@ -52,8 +68,11 @@ export default function RiderScreen() {
 
   const pushGPS = async () => {
     try {
+      // Use balanced accuracy with timeout for faster response on real devices
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 3000,
+        distanceInterval: 0,
       });
       const { latitude, longitude } = loc.coords;
       setCoords({ lat: latitude, lng: longitude });
@@ -69,7 +88,8 @@ export default function RiderScreen() {
       setLastPush(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       setError(null);
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to push location');
+      const msg = err?.response?.data?.message || err?.message || 'Failed to push location';
+      setError(msg);
     }
   };
 
@@ -81,12 +101,18 @@ export default function RiderScreen() {
     const ok = await requestPermission();
     if (!ok) return;
 
-    setIsTracking(true);
+    setStartingUp(true);
     setError(null);
 
-    // Push immediately then on interval
-    await pushGPS();
-    intervalRef.current = setInterval(pushGPS, PUSH_INTERVAL_MS);
+    try {
+      await pushGPS();
+      setIsTracking(true);
+      intervalRef.current = setInterval(pushGPS, PUSH_INTERVAL_MS);
+    } catch {
+      setError('Could not get location. Make sure GPS is on.');
+    } finally {
+      setStartingUp(false);
+    }
   };
 
   const stopTracking = async () => {
@@ -197,14 +223,17 @@ export default function RiderScreen() {
 
         {/* start / stop */}
         {!isTracking ? (
-          <TouchableOpacity style={st.startBtn} onPress={startTracking} activeOpacity={0.85}>
+          <TouchableOpacity style={st.startBtn} onPress={startTracking} disabled={startingUp} activeOpacity={0.85}>
             <LinearGradient
               colors={[COLORS.accentGreen, '#2e7d32']}
               style={st.btnGrad}
               start={{ x:0, y:0 }} end={{ x:1, y:0 }}
             >
-              <Ionicons name="navigate" size={22} color="#fff" />
-              <Text style={st.btnTxt}>Start Broadcasting</Text>
+              {startingUp ? (
+                <><Text style={st.btnTxt}>Getting Location...</Text></>
+              ) : (
+                <><Ionicons name="navigate" size={22} color="#fff" /><Text style={st.btnTxt}>Start Broadcasting</Text></>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         ) : (

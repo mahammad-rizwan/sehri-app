@@ -66,19 +66,76 @@ const getMCToken = async () => {
   if (_cachedToken && Date.now() < _tokenExpiry) {
     return _cachedToken;
   }
-  const customerId = process.env.MESSAGECENTRAL_CUSTOMER_ID;
-  const password   = process.env.MESSAGECENTRAL_PASSWORD;
-  if (!customerId || !password)
+
+  const tryGetToken = async (customerId, password, label) => {
+    // MC requires password as base64. Do NOT URL-encode the = padding —
+    // pass the raw base64 string so = stays as = in the query string.
+    const b64 = Buffer.from(password).toString('base64');
+    logger.debug(`MC token attempt [${label}] customerId=${customerId} b64=${b64}`);
+
+    return new Promise((resolve) => {
+      const rawQuery = `?customerId=${customerId}&key=${b64}&scope=NEW&country=91`;
+      const req = require('https').request(
+        {
+          hostname: 'cpaas.messagecentral.com',
+          path: '/auth/v1/authentication/token' + rawQuery,
+          method: 'GET',
+          headers: { accept: 'application/json' },
+        },
+        (res) => {
+          let raw = '';
+          res.on('data', (c) => (raw += c));
+          res.on('end', () => {
+            logger.debug(`MC token [${label}] HTTP ${res.statusCode} → ${raw.slice(0, 300)}`);
+            if (!raw.trim()) { resolve({ _status: res.statusCode }); return; }
+            try { resolve({ ...JSON.parse(raw), _status: res.statusCode }); }
+            catch { resolve({ _raw: raw, _status: res.statusCode }); }
+          });
+        }
+      );
+      req.on('error', (e) => {
+        logger.warn(`MC token [${label}] request error: ${e.message}`);
+        resolve({ _error: e.message });
+      });
+      req.setTimeout(20000, () => {
+        req.destroy();
+        resolve({ _error: 'timeout' });
+      });
+      req.end();
+    });
+  };
+
+  const id1  = process.env.MESSAGECENTRAL_CUSTOMER_ID;
+  const pwd1 = process.env.MESSAGECENTRAL_PASSWORD;
+  const id2  = process.env.MESSAGECENTRAL_CUSTOMER_ID1;
+  const pwd2 = process.env.MESSAGECENTRAL_PASSWORD1;
+
+  if (!id1 || !pwd1)
     throw new Error('MESSAGECENTRAL credentials not set in .env');
-  const b64  = Buffer.from(password).toString('base64');
-  const resp = await apiCall('GET',
-    `https://cpaas.messagecentral.com/auth/v1/authentication/token` +
-    `?customerId=${encodeURIComponent(customerId)}&key=${encodeURIComponent(b64)}&scope=NEW&country=91`
-  );
-  if (!resp?.token) throw new Error(`MC token failed: ${JSON.stringify(resp)}`);
-  _cachedToken = resp.token;
-  _tokenExpiry = Date.now() + 22 * 60 * 60 * 1000; // cache for 22 hours
-  return _cachedToken;
+
+  // Try primary credentials
+  let resp = await tryGetToken(id1, pwd1, 'primary');
+  if (resp?.token) {
+    _cachedToken = resp.token;
+    _tokenExpiry = Date.now() + 22 * 60 * 60 * 1000;
+    logger.info('MC token obtained via primary credentials');
+    return _cachedToken;
+  }
+  logger.warn(`MC primary credentials failed: ${JSON.stringify(resp)}`);
+
+  // Try alternate credentials if available
+  if (id2 && pwd2) {
+    resp = await tryGetToken(id2, pwd2, 'alternate');
+    if (resp?.token) {
+      _cachedToken = resp.token;
+      _tokenExpiry = Date.now() + 22 * 60 * 60 * 1000;
+      logger.info('MC token obtained via alternate credentials');
+      return _cachedToken;
+    }
+    logger.warn(`MC alternate credentials also failed: ${JSON.stringify(resp)}`);
+  }
+
+  throw new Error(`MC token failed: ${JSON.stringify(resp)}`);
 };
 
 const sendOTP = async (phone, purpose = 'register') => {
@@ -155,7 +212,7 @@ const verifyOTP = async (phone, code, purpose) => {
 
   const status = resp?.data?.verificationStatus ?? resp?.verificationStatus ?? '';
   if (status === 'VERIFICATION_COMPLETED') {
-    await record.update({ is_used: true });
+    await record.update({ is_used: true, verified_at: new Date() });
     return { valid: true, reason: 'OTP verified successfully' };
   }
 

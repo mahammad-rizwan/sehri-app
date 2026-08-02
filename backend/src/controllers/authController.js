@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
-const { User, Admin, SuperAdmin } = require('../models');
+const { Op } = require('sequelize');
+const { User, Admin, SuperAdmin, OTP } = require('../models');
 const { saveOTP, verifyOTP, sendOTP } = require('../utils/otp');
 const { generateTokens, verifyRefreshToken } = require('../utils/jwt');
 const { success, error } = require('../utils/response');
@@ -446,9 +447,10 @@ const forgotPasswordVerifyOtp = async (req, res) => {
 
 /**
  * POST /auth/forgot-password/reset
- * Reset password — only allowed after OTP has been verified (is_used = true by verifyOTP)
- * Re-checks: verifies there is no active unused OTP left (meaning verify-otp was called first)
+ * Reset password — only allowed after OTP has been verified via verify-otp
  */
+const OTP_RESET_WINDOW_MINUTES = 10;
+
 const forgotPasswordReset = async (req, res) => {
   try {
     const { phone, newPassword } = req.body;
@@ -459,10 +461,26 @@ const forgotPasswordReset = async (req, res) => {
       return error(res, 'Account not found.', 404);
     }
 
+    // Require a successfully verified OTP within the last 10 minutes
+    const verifiedOtp = await OTP.findOne({
+      where: { phone, purpose: 'forgot_password', verified_at: { [Op.ne]: null } },
+      order: [['verified_at', 'DESC']],
+    });
+    if (!verifiedOtp) {
+      return error(res, 'OTP verification required before resetting your password.', 400);
+    }
+    const verifiedAt = new Date(verifiedOtp.verified_at);
+    if (Date.now() - verifiedAt.getTime() > OTP_RESET_WINDOW_MINUTES * 60 * 1000) {
+      return error(res, 'OTP has expired. Please request a new OTP.', 400);
+    }
+
     // Hash new password and save
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
     await user.update({ password: hashedPassword });
+
+    // Invalidate the verification so it cannot be reused
+    await verifiedOtp.update({ verified_at: null, is_used: true });
 
     logger.info(`Password reset successful for ${phone}`);
     return success(res, {}, 'Password reset successfully. Please login with your new password.');

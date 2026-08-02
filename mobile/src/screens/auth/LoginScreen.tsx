@@ -237,7 +237,7 @@ const s = StyleSheet.create({
   phoneRow: { flexDirection: 'row', borderRadius: SIZES.radius.md, borderWidth: 1.5, borderColor: 'rgba(201,168,76,0.25)', backgroundColor: '#0A1929', overflow: 'hidden', marginBottom: 8 },
   cc: { paddingHorizontal: 12, justifyContent: 'center', borderRightWidth: 1, borderColor: 'rgba(201,168,76,0.2)', backgroundColor: '#071522' },
   ccTxt: { color: COLORS.textPrimary, fontSize: 15 },
-  phoneInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, color: COLORS.textPrimary, fontSize: 15 },
+  phoneInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, color: '#FFFFFF', fontSize: 15 },
   passwordRow: { flexDirection: 'row', borderRadius: SIZES.radius.md, borderWidth: 1.5, borderColor: 'rgba(201,168,76,0.25)', backgroundColor: '#0A1929', overflow: 'hidden', marginBottom: 8, alignItems: 'center' },
   passwordInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, color: COLORS.textPrimary, fontSize: 15 },
   eyeBtn: { paddingHorizontal: 12, justifyContent: 'center' },
@@ -331,9 +331,13 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
   const IDX: Record<FPStep, number> = { phone: 0, otp: 1, password: 2, success: 3 };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={fp.overlay}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={fp.kav}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose} statusBarTranslucent>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={fp.kavOuter}
+        keyboardVerticalOffset={0}
+      >
+        <TouchableOpacity style={fp.overlayBg} activeOpacity={1} onPress={onClose} />
           <LinearGradient colors={['#0D1B2A', '#152336']} style={fp.sheet}>
             <View style={fp.hdr}>
               {step !== 'phone' && step !== 'success'
@@ -448,15 +452,14 @@ function ForgotPasswordModal({ visible, onClose }: { visible: boolean; onClose: 
               )}
             </ScrollView>
           </LinearGradient>
-        </KeyboardAvoidingView>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const fp = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' },
-  kav: { justifyContent: 'flex-end' },
+  kavOuter: { flex: 1, justifyContent: 'flex-end' },
+  overlayBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)' },
   sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 8, maxHeight: '92%', borderTopWidth: 1, borderColor: 'rgba(201,168,76,0.2)' },
   hdr: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
   hdrBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
@@ -474,7 +477,7 @@ const fp = StyleSheet.create({
   phoneRow: { flexDirection: 'row', borderRadius: 10, borderWidth: 1.5, borderColor: 'rgba(201,168,76,0.25)', backgroundColor: '#0A1929', overflow: 'hidden', marginBottom: 8 },
   cc: { paddingHorizontal: 12, justifyContent: 'center', borderRightWidth: 1, borderColor: 'rgba(201,168,76,0.2)', backgroundColor: '#071522' },
   ccTxt: { color: COLORS.textPrimary, fontSize: 15 },
-  phoneInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, color: COLORS.textPrimary, fontSize: 15 },
+  phoneInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, color: '#FFFFFF', fontSize: 15 },
   otpHint: { alignItems: 'center', gap: 10, marginVertical: 16 },
   otpHintTxt: { color: COLORS.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 22 },
   otpRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 16 },

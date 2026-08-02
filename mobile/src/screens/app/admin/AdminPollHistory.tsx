@@ -161,6 +161,12 @@ export default function AdminPollHistory() {
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Back to Dashboard */}
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(app)/admin/dashboard' as any)} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
+          <Text style={styles.backBtnText}>Dashboard</Text>
+        </TouchableOpacity>
+
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Poll History</Text>
           <Text style={styles.headerSub}>
@@ -307,6 +313,8 @@ export default function AdminPollHistory() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  backBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
   header: {
     paddingTop: 16,
     paddingBottom: 24,

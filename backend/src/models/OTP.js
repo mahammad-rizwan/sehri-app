@@ -27,6 +27,10 @@ const OTP = sequelize.define('OTP', {
     type: DataTypes.INTEGER,
     defaultValue: 0,
   },
+  verified_at: {
+    type: DataTypes.DATE,
+    allowNull: true, // Set when OTP verification succeeds
+  },
   expires_at: {
     type: DataTypes.DATE,
     allowNull: false,

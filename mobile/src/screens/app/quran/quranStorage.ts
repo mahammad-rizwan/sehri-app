@@ -42,6 +42,13 @@ export async function toggleBookmark(bm: Bookmark): Promise<Bookmark[]> {
   return list;
 }
 
+export async function removeBookmark(surahId: number, ayahNumber: number): Promise<Bookmark[]> {
+  const list = await getBookmarks();
+  const filtered = list.filter((b) => !(b.surahId === surahId && b.ayahNumber === ayahNumber));
+  await AsyncStorage.setItem(KEYS.BOOKMARKS, JSON.stringify(filtered));
+  return filtered;
+}
+
 export async function isBookmarked(surahId: number, ayahNumber: number): Promise<boolean> {
   const list = await getBookmarks();
   return list.some((b) => b.surahId === surahId && b.ayahNumber === ayahNumber);

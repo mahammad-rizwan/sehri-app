@@ -1,105 +1,69 @@
-const Razorpay = require('razorpay');
-const crypto = require('crypto');
+const path = require('path');
 const { Op } = require('sequelize');
 const { Donation } = require('../models');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
-
 /**
- * POST /donations/create-order
- * Create a Razorpay order for donation
+ * POST /donations/submit
+ * Submit a donation with proof of payment (UPI transfer)
  */
-const createOrder = async (req, res) => {
+const submitDonation = async (req, res) => {
   try {
-    const { amount, donor_name, donor_phone, message, is_anonymous = false } = req.body;
+    const { donor_name, message, is_anonymous: isAnonymousRaw = false } = req.body;
+    const is_anonymous = isAnonymousRaw === 'true' || isAnonymousRaw === true;
 
-    if (!amount || amount < 1) return error(res, 'Amount must be at least ₹1', 400);
+    if (!req.file) {
+      return error(res, 'Payment proof image is required', 400);
+    }
 
-    const amountInPaise = Math.round(parseFloat(amount) * 100);
+    const name = is_anonymous
+      ? 'Anonymous'
+      : (donor_name || (req.user ? req.user.name : 'Anonymous'));
 
-    const order = await razorpay.orders.create({
-      amount: amountInPaise,
-      currency: 'INR',
-      receipt: `sehri_${Date.now()}`,
-      notes: {
-        donor_name: donor_name || 'Anonymous',
-        purpose: 'Sehri Food Distribution',
-      },
-    });
+    const proofPath = `/uploads/donations/${req.file.filename}`;
 
-    // Store in DB
     const donation = await Donation.create({
       user_id: is_anonymous ? null : (req.user ? req.user.id : null),
-      razorpay_order_id: order.id,
-      amount: parseFloat(amount),
-      currency: 'INR',
-      status: 'created',
-      donor_name: is_anonymous ? 'Anonymous' : (donor_name || req.user?.name || 'Anonymous'),
-      donor_phone: is_anonymous ? null : (donor_phone || req.user?.phone),
+      status: 'pending',
+      donor_name: name,
+      donor_phone: is_anonymous ? null : (req.user ? req.user.phone : null),
       message,
+      proof_url: proofPath,
     });
 
-    return success(res, {
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      donationId: donation.id,
-      key: process.env.RAZORPAY_KEY_ID,
-    }, 'Order created successfully', 201);
+    logger.info(`Donation submitted: ${donation.id} by ${name}`);
+
+    return success(res, { donationId: donation.id }, 'Donation submitted successfully', 201);
   } catch (err) {
-    logger.error('createOrder error:', err);
-    return error(res, 'Failed to create payment order', 500);
+    logger.error('submitDonation error:', err);
+    return error(res, 'Failed to submit donation', 500);
   }
 };
 
 /**
- * POST /donations/verify-payment
- * Verify Razorpay payment signature
+ * PATCH /donations/:id/status (Super Admin)
+ * Approve or reject a donation based on the submitted proof
  */
-const verifyPayment = async (req, res) => {
+const updateDonationStatus = async (req, res) => {
   try {
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-    } = req.body;
+    const { id } = req.params;
+    const { status } = req.body;
 
-    // Verify signature
-    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest('hex');
-
-    if (expectedSignature !== razorpay_signature) {
-      await Donation.update(
-        { status: 'failed' },
-        { where: { razorpay_order_id } }
-      );
-      return error(res, 'Payment verification failed', 400);
+    if (!['paid', 'rejected'].includes(status)) {
+      return error(res, 'Invalid status. Use "paid" or "rejected"', 400);
     }
 
-    const donation = await Donation.update(
-      {
-        razorpay_payment_id,
-        razorpay_signature,
-        status: 'paid',
-      },
-      { where: { razorpay_order_id }, returning: true }
-    );
+    const donation = await Donation.findByPk(id);
+    if (!donation) return error(res, 'Donation not found', 404);
 
-    return success(res, {
-      razorpay_payment_id,
-      message: 'JazakAllahu Khayran! Your donation has been received.',
-    }, 'Payment verified successfully');
+    donation.status = status;
+    await donation.save();
+
+    return success(res, donation, 'Donation status updated');
   } catch (err) {
-    logger.error('verifyPayment error:', err);
-    return error(res, 'Failed to verify payment', 500);
+    logger.error('updateDonationStatus error:', err);
+    return error(res, 'Failed to update donation status', 500);
   }
 };
 
@@ -110,7 +74,7 @@ const verifyPayment = async (req, res) => {
 const getDonationHistory = async (req, res) => {
   try {
     const donations = await Donation.findAll({
-      where: { user_id: req.user.id, status: 'paid' },
+      where: { user_id: req.user.id },
       order: [['created_at', 'DESC']],
       limit: 20,
     });
@@ -154,7 +118,6 @@ const getDonationSummary = async (req, res) => {
     });
 
     const recentDonations = await Donation.findAll({
-      where: { status: 'paid' },
       order: [['created_at', 'DESC']],
       limit: 50,
     });
@@ -173,4 +136,4 @@ const getDonationSummary = async (req, res) => {
   }
 };
 
-module.exports = { createOrder, verifyPayment, getDonationHistory, getDonationSummary };
+module.exports = { submitDonation, updateDonationStatus, getDonationHistory, getDonationSummary };

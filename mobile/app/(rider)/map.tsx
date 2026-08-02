@@ -23,6 +23,7 @@ export default function RiderMapScreen() {
   const [riders, setRiders]          = useState<any[]>([]);
   const [loading, setLoading]        = useState(true);
   const [mapReady, setMapReady]      = useState(false);
+  const [mapError, setMapError]      = useState(false);
   const [selectedRider, setSelected] = useState<any>(null);
   const webviewRef  = useRef<WebView>(null);
   const prevCoords  = useRef<{ lat: number; lng: number } | null>(null);
@@ -83,8 +84,15 @@ export default function RiderMapScreen() {
           domStorageEnabled
           originWhitelist={['*']}
           mixedContentMode="always"
-          onLoadEnd={() => setMapReady(true)}
-          onError={() => setMapReady(false)}
+          allowFileAccessFromFileURLs
+          allowUniversalAccessFromFileURLs
+          setSupportMultipleWindows={false}
+          androidLayerType="hardware"
+          geolocationEnabled={false}
+          cacheEnabled={false}
+          onLoadEnd={() => { setMapReady(true); setMapError(false); }}
+          onError={() => { setMapReady(false); setMapError(true); }}
+          onHttpError={() => { setMapReady(false); setMapError(true); }}
           startInLoadingState
           renderLoading={() => (
             <View style={st.loader}>
@@ -93,6 +101,13 @@ export default function RiderMapScreen() {
             </View>
           )}
         />
+        {mapError && (
+          <View style={st.mapError}>
+            <Text style={{ fontSize: 40 }}>🗺️</Text>
+            <Text style={st.mapErrorTitle}>Map unavailable</Text>
+            <Text style={st.mapErrorSub}>Check your internet connection.{'\n'}Google Maps may need an unrestricted API key.</Text>
+          </View>
+        )}
       </View>
 
       {/* Header gradient with back button */}
@@ -117,6 +132,15 @@ const st = StyleSheet.create({
   webview: { flex: 1, backgroundColor: '#0d1b2a' },
   loader:  { ...StyleSheet.absoluteFillObject, backgroundColor: '#050D16', alignItems: 'center', justifyContent: 'center', gap: 8 },
   loaderTxt: { color: COLORS.primary, fontSize: SIZES.sm },
+
+  mapError: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#050D16',
+    alignItems: 'center', justifyContent: 'center', gap: 8,
+    padding: 32,
+  },
+  mapErrorTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: 4 },
+  mapErrorSub: { color: '#8899AA', fontSize: 13, textAlign: 'center', lineHeight: 20 },
 
   header: {
     position: 'absolute', top: 0, left: 0, right: 0,

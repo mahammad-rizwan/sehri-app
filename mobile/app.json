@@ -35,6 +35,10 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
         "VIBRATE"
       ]
     },
@@ -49,7 +53,9 @@
       [
         "expo-font",
         {
-          "fonts": ["./assets/fonts/IndopakNastaleeq.ttf"]
+          "fonts": [
+            "./assets/fonts/IndopakNastaleeq.ttf"
+          ]
         }
       ],
       [
@@ -60,14 +66,43 @@
         }
       ],
       [
-        "react-native-maps",
+        "expo-build-properties",
         {
-          "googleMapsApiKey": "AIzaSyAWQfQB0HfybB3h-yflpD1Dws6EuhY-8go"
+          "android": {
+            "googleServicesFile": "./google-services.json",
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Sehri Connect to access your photos to upload donation payment proof."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Sehri Connect to save the donation QR code to your device.",
+          "savePhotosPermission": "Allow Sehri Connect to save the donation QR code to your device."
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "07ed36cc-e75c-47bb-afb0-0b464d4bd275"
+      }
+    },
+    "owner": "rizwan866",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/07ed36cc-e75c-47bb-afb0-0b464d4bd275"
     }
   }
 }

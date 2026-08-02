@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
@@ -12,6 +12,7 @@ import { useAuthStore } from '../../../store/authStore';
 import api from '../../../services/api';
 import { ENDPOINTS } from '../../../constants/api';
 import Toast from 'react-native-toast-message';
+import { connectSocket, listenNewMessage, listenDeleteMessage, getSocket } from '../../../services/socketService';
 
 interface ChatGroup {
   id: string;
@@ -43,6 +44,35 @@ export default function ChatListScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { loadGroups(); }, [loadGroups]));
+
+  // Live updates via Socket.IO
+  useEffect(() => {
+    connectSocket();
+
+    const unsubMsg = listenNewMessage((msg: any) => {
+      setGroups((prev) => prev.map((g) => {
+        if (g.id !== msg.group_id) return g;
+        const isMine = msg.sender_id === user?.id;
+        return {
+          ...g,
+          last_message: { message: msg.message, sender_name: msg.sender_name, createdAt: msg.createdAt },
+          unread_count: isMine ? g.unread_count : g.unread_count + 1,
+        };
+      }));
+    });
+
+    const unsubDelete = listenDeleteMessage((data) => {
+      setGroups((prev) => prev.map((g) => {
+        if (g.id !== data.groupId) return g;
+        if (g.last_message?.message && g.last_message.createdAt === data.createdAt) {
+          return { ...g, last_message: null };
+        }
+        return g;
+      }));
+    });
+
+    return () => { unsubMsg(); unsubDelete(); };
+  }, [user?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -126,6 +156,11 @@ export default function ChatListScreen() {
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
+      {/* Back to Dashboard */}
+      <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(app)/admin/dashboard' as any)} activeOpacity={0.7}>
+        <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
+        <Text style={styles.backBtnText}>Dashboard</Text>
+      </TouchableOpacity>
       <FlatList
         data={groups}
         keyExtractor={(item) => item.id}
@@ -157,6 +192,8 @@ export default function ChatListScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  backBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
   listContent: { padding: SIZES.spacing.base, paddingTop: SIZES.spacing.lg, paddingBottom: 100 },
   groupCard: {
     flexDirection: 'row',

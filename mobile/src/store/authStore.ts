@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import api from '../services/api';
 import { ENDPOINTS } from '../constants/api';
+import { registerForPushNotifications } from '../services/notificationService';
 
 export interface User {
   id: string;
@@ -80,6 +81,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         isLoading: false,
       });
+      registerForPushNotifications().catch(err => console.warn('[Push] Registration error (initialize):', err));
     } catch {
       await api.clearTokens();
       set({ user: null, userRole: null, activeRole: null, isAuthenticated: false, isLoading: false });
@@ -102,6 +104,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       activeRole: role as 'user' | 'admin' | 'super_admin',
       isAuthenticated: true,
     });
+    registerForPushNotifications().catch(err => console.warn('[Push] Registration error (login):', err));
     return data.data.user;
   },
 
@@ -134,6 +137,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       userRole: targetRole,
       activeRole: targetRole,
     });
+    registerForPushNotifications().catch(err => console.warn('[Push] Registration error (switchRole):', err));
     return data.data.user;
   },
 

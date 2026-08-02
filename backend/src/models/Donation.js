@@ -11,30 +11,17 @@ const Donation = sequelize.define('Donation', {
     type: DataTypes.UUID,
     allowNull: true, // Allow anonymous donations
   },
-  razorpay_order_id: {
-    type: DataTypes.STRING(200),
-    allowNull: false,
-    unique: true,
-  },
-  razorpay_payment_id: {
-    type: DataTypes.STRING(200),
-    allowNull: true,
-  },
-  razorpay_signature: {
-    type: DataTypes.STRING(500),
-    allowNull: true,
-  },
   amount: {
     type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
+    allowNull: true, // Amount is manually verified after proof review
   },
   currency: {
     type: DataTypes.STRING(3),
     defaultValue: 'INR',
   },
   status: {
-    type: DataTypes.ENUM('created', 'paid', 'failed', 'refunded'),
-    defaultValue: 'created',
+    type: DataTypes.ENUM('pending', 'paid', 'rejected'),
+    defaultValue: 'pending',
   },
   donor_name: {
     type: DataTypes.STRING(100),
@@ -48,12 +35,15 @@ const Donation = sequelize.define('Donation', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  proof_url: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+  },
 }, {
   tableName: 'donations',
   indexes: [
     { fields: ['user_id'] },
     { fields: ['status'] },
-    { fields: ['razorpay_order_id'] },
   ],
 });
 

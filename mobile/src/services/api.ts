@@ -78,6 +78,11 @@ class ApiService {
   post = (url: string, data?: any) =>
     this.instance.post(url, data);
 
+  postForm = (url: string, formData: FormData) =>
+    this.instance.post(url, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
   patch = (url: string, data?: any) =>
     this.instance.patch(url, data);
 

@@ -2,16 +2,17 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
   Platform, ActivityIndicator, Alert, Modal, Keyboard,
-  Animated, PanResponder,
+  Animated, PanResponder, BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES } from '../../../constants/theme';
 import { useAuthStore } from '../../../store/authStore';
 import api from '../../../services/api';
 import { ENDPOINTS } from '../../../constants/api';
 import Toast from 'react-native-toast-message';
+import { connectSocket, listenNewMessage, listenDeleteMessage, getSocket, disconnectSocket } from '../../../services/socketService';
 
 interface ReplyTo {
   id: string;
@@ -112,6 +113,7 @@ function SwipeableMessage({ item, mine, onReply, onLongPress, children }: any) {
 export default function ChatScreen() {
   const { id: groupId } = useLocalSearchParams<{ id: string }>();
   const { user, activeRole } = useAuthStore();
+  const router = useRouter();
   const isSuperAdmin = user?.role === 'super_admin';
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -138,6 +140,15 @@ export default function ChatScreen() {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
+  // Android physical back → go back to chat list
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.push('/(app)/admin/chat' as any);
+      return true;
+    });
+    return () => sub.remove();
+  }, [router]);
+
   useEffect(() => {
     api.post(ENDPOINTS.CHAT_MARK_READ(groupId!)).catch(() => {});
   }, [groupId]);
@@ -158,6 +169,38 @@ export default function ChatScreen() {
   }, [groupId]);
 
   useEffect(() => { loadMessages(); loadGroup(); }, [loadMessages, loadGroup]);
+
+  // Live chat via Socket.IO — replaces old 3s polling
+  useEffect(() => {
+    connectSocket().then((s) => {
+      if (s) {
+        s.emit('join-group', groupId);
+      }
+    });
+
+    const unsubMsg = listenNewMessage((msg: Message) => {
+      if (msg.group_id === groupId) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    });
+
+    const unsubDelete = listenDeleteMessage((data) => {
+      if (data.groupId === groupId) {
+        setMessages((prev) => prev.filter((m) => m.id !== data.msgId));
+      }
+    });
+
+    return () => {
+      const s = getSocket();
+      if (s) s.emit('leave-group', groupId);
+      unsubMsg();
+      unsubDelete();
+    };
+  }, [groupId]);
 
   const handleSend = async () => {
     if (!text.trim() || sending) return;
@@ -295,6 +338,14 @@ export default function ChatScreen() {
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
       <TouchableOpacity style={styles.headerBar} onPress={() => setMemberModal(true)} activeOpacity={0.8}>
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/admin/chat' as any)}
+          style={styles.headerBackBtn}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
+        </TouchableOpacity>
         <LinearGradient colors={[COLORS.primary, COLORS.primaryLight]} style={styles.headerAvatar}>
           <Text style={styles.headerAvatarText}>{groupName?.charAt(0)?.toUpperCase() || '#'}</Text>
         </LinearGradient>
@@ -445,6 +496,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   headerBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIZES.spacing.base, paddingVertical: SIZES.spacing.sm, backgroundColor: COLORS.backgroundCard, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  headerBackBtn: { marginRight: 8, padding: 2 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   headerAvatarText: { color: COLORS.textOnPrimary, fontSize: 18, fontWeight: '800' },
   headerInfo: { flex: 1 },

@@ -2,9 +2,7 @@
 // For Android emulator use: http://10.0.2.2:5000/api
 // For iOS simulator use:    http://localhost:5000/api
 // For physical device use:  http://10.140.44.133:5000/api
-export const API_BASE_URL = __DEV__
-  ? 'http://10.71.183.133:5000/api'    // Your machine's LAN IP for device testing
-  : 'https://api.sehriconnect.com/api'; // Production URL
+export const API_BASE_URL = 'http://10.71.183.133:5000/api';
 
 export const API_TIMEOUT = 15000; // 15 seconds
 
@@ -52,8 +50,7 @@ export const ENDPOINTS = {
   POLL_ZONE_VOTERS: (id: string) => `/polls/${id}/zone-voters`,
 
   // Donations
-  CREATE_ORDER: '/donations/create-order',
-  VERIFY_PAYMENT: '/donations/verify-payment',
+  SUBMIT_DONATION: '/donations/submit',
   DONATION_HISTORY: '/donations/history',
   DONATION_SUMMARY: '/donations/summary',
 

@@ -1,13 +1,18 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
 const helmet = require('helmet');
 const cors = require('cors');
 const morgan = require('morgan');
 const compression = require('compression');
+const cron = require('node-cron');
 const { connectDB } = require('./database/connection');
 const { generalLimiter } = require('./middleware/rateLimiter');
 const { error } = require('./utils/response');
 const logger = require('./utils/logger');
+const { notifyAllUsers } = require('./services/expoPushService');
+const { setupSocket } = require('./services/socketService');
+const { fetchAndSavePrayerTimings } = require('./controllers/prayerController');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -18,19 +23,26 @@ const donationRoutes = require('./routes/donations');
 const feedbackRoutes = require('./routes/feedback');
 const trackingRoutes = require('./routes/tracking');
 const chatRoutes = require('./routes/chat');
+const prayerRoutes = require('./routes/prayers');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+app.set('trust proxy', 1);
+
 // ─────────────── Security Middleware ───────────────
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.FRONTEND_URL
-    : '*',
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning'],
 }));
+
+// Skip ngrok browser warning for all requests
+app.use((req, res, next) => {
+  res.setHeader('ngrok-skip-browser-warning', 'true');
+  next();
+});
 
 // ─────────────── General Middleware ───────────────
 app.use(compression());
@@ -59,6 +71,7 @@ app.use('/api/donations', donationRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/prayers', prayerRoutes);
 
 // ─────────────── 404 Handler ───────────────
 app.use((req, res) => {
@@ -76,9 +89,49 @@ app.use((err, req, res, next) => {
 });
 
 // ─────────────── Start Server ───────────────
+// ─────────────── Scheduled Push Notifications ───────────────
+function scheduleReminders() {
+  const times = [
+    { cron: '0 22 * * *', label: '10 PM' },
+    { cron: '0 5 * * *', label: '5 AM' },
+    { cron: '50 9 * * *', label: '9:50 AM' },
+  ];
+
+  for (const t of times) {
+    cron.schedule(t.cron, () => {
+      const body = t.label === '9:50 AM'
+        ? '⏰ Poll closes at 10 AM! Please cast your vote for Sehri now.'
+        : '🗳️ Don\'t forget to cast your vote for Sehri!';
+      notifyAllUsers('🌙 Sehri Poll Reminder', body).catch((err) => logger.error('Cron reminder error:', err.message));
+    }, { scheduled: true, timezone: 'Asia/Kolkata' });
+  }
+
+  logger.info('⏰ Push notification reminders scheduled (IST)');
+}
+
+function schedulePrayerTimings() {
+  cron.schedule('5 0 * * *', async () => {
+    try {
+      await fetchAndSavePrayerTimings();
+    } catch (err) {
+      logger.error('Prayer timing cron error:', err.message);
+    }
+  }, { scheduled: true, timezone: 'Asia/Kolkata' });
+  logger.info('🕌 Prayer timing fetch scheduled (daily at 00:05 IST)');
+}
+
 const startServer = async () => {
   await connectDB();
-  app.listen(PORT, () => {
+  scheduleReminders();
+  schedulePrayerTimings();
+
+  const server = http.createServer(app);
+  setupSocket(server);
+
+  // Fetch prayer timings on startup (non-blocking)
+  fetchAndSavePrayerTimings().catch((err) => logger.warn('Could not fetch prayer timings on startup:', err.message));
+
+  server.listen(PORT, () => {
     logger.info(`🚀 Sehri Connect API running on port ${PORT}`);
     logger.info(`📡 Environment: ${process.env.NODE_ENV}`);
   });

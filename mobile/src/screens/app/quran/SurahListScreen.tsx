@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, ActivityIndicator, Modal, Platform,
@@ -74,29 +74,32 @@ export default function SurahListScreen() {
   const { theme, fontSizeKey, setTheme, setFontSizeKey } = useQuranSettings();
   const [surahs, setSurahs] = useState<Surah[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [showSettings, setShowSettings] = useState(false);
 
-  useEffect(() => {
+  const fetchSurahs = useCallback(async () => {
     if (chapterCache) {
       setSurahs(chapterCache.data.map(mapChapter));
       setLoading(false);
       return;
     }
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/chapters?language=en`);
-        const json = await res.json();
-        const chapters: Chapter[] = json.chapters || [];
-        chapterCache = { data: chapters };
-        setSurahs(chapters.map(mapChapter));
-      } catch {
-        setSurahs([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/chapters?language=en`);
+      const json = await res.json();
+      const chapters: Chapter[] = json.chapters || [];
+      chapterCache = { data: chapters };
+      setSurahs(chapters.map(mapChapter));
+    } catch {
+      setError('Failed to load Surahs. Check your internet connection.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { fetchSurahs(); }, [fetchSurahs]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return surahs;
@@ -136,6 +139,18 @@ export default function SurahListScreen() {
     return (
       <LinearGradient colors={t.bg} style={styles.container}>
         <ActivityIndicator color={COLORS.primary} size="large" style={{ flex: 1 }} />
+      </LinearGradient>
+    );
+  }
+
+  if (error) {
+    return (
+      <LinearGradient colors={t.bg} style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="cloud-offline-outline" size={48} color={t.secondary} />
+        <Text style={[styles.emptyText, { color: t.secondary, textAlign: 'center', marginTop: 12, marginBottom: 20 }]}>{error}</Text>
+        <TouchableOpacity onPress={fetchSurahs} activeOpacity={0.8} style={{ backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}>
+          <Text style={{ color: COLORS.textOnPrimary, fontWeight: '700', fontSize: 14 }}>Retry</Text>
+        </TouchableOpacity>
       </LinearGradient>
     );
   }

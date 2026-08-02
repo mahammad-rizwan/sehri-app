@@ -170,8 +170,8 @@ export default function RegisterScreen() {
       if (params.area) {
         setLocality(params.area);
         // Find which bangaloreArea contains this locality
-        for (const [ba, baData] of Object.entries(BANGALORE_AREAS as any)) {
-          const locs: string[] = baData.localities || [];
+        for (const [ba, baData] of Object.entries(BANGALORE_AREAS)) {
+          const locs = (baData as any).localities || [];
           if (locs.includes(params.area)) {
             setBangaloreArea(ba);
             break;
@@ -182,7 +182,7 @@ export default function RegisterScreen() {
         setInternalZone(params.zone);
         // Find which college maps to this zone
         for (const [collegeKey, zones] of Object.entries(COLLEGE_ZONES as any)) {
-          const zList: { key: string }[] = zones || [];
+          const zList = (zones || []) as { key: string }[];
           if (zList.some((z) => z.key === params.zone)) {
             setCollege(collegeKey);
             break;
@@ -619,7 +619,6 @@ export default function RegisterScreen() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  container: { flex: 1 },
   container: { flex: 1 },
   star: { position: 'absolute', backgroundColor: COLORS.primary, zIndex: 0 },
   geometricBg: { position: 'absolute', top: -50, alignSelf: 'center', zIndex: 0 },

@@ -20,6 +20,10 @@ const SuperAdmin = sequelize.define('SuperAdmin', {
     type: DataTypes.STRING(100),
     allowNull: false,
   },
+  fcm_token: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
 }, {
   tableName: 'super_admins',
   timestamps: true,

@@ -80,66 +80,68 @@ export default function QuranReaderScreen() {
   const [surahName, setSurahName] = useState('');
   const [surahNameAr, setSurahNameAr] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [bookmarked, setBookmarked] = useState<Set<number>>(new Set());
   const [searchText, setSearchText] = useState('');
   const [jumpTo, setJumpTo] = useState('');
   const [showJump, setShowJump] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const cached = await getCachedSurah(surahId);
-      if (cached) {
-        setArabic(cached.arabic);
-        setTranslation(cached.translation);
-        setSurahName(cached.surahName);
-        setSurahNameAr(cached.surahNameAr || '');
-        setLoading(false);
-        return;
-      }
-      try {
-        const [arRes, trRes, chRes] = await Promise.all([
-          fetch(`${API_BASE}/quran/verses/indopak_nastaleeq?chapter_number=${surahId}`),
-          fetch(`${API_BASE}/quran/translations/20?chapter_number=${surahId}`),
-          fetch(`${API_BASE}/chapters/${surahId}?language=en`),
-        ]);
-        const arJson = await arRes.json();
-        const trJson = await trRes.json();
-        const chJson = await chRes.json();
+  const fetchSurah = useCallback(async () => {
+    const cached = await getCachedSurah(surahId);
+    if (cached) {
+      setArabic(cached.arabic);
+      setTranslation(cached.translation);
+      setSurahName(cached.surahName);
+      setSurahNameAr(cached.surahNameAr || '');
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const [arRes, trRes, chRes] = await Promise.all([
+        fetch(`${API_BASE}/quran/verses/indopak_nastaleeq?chapter_number=${surahId}`),
+        fetch(`${API_BASE}/quran/translations/20?chapter_number=${surahId}`),
+        fetch(`${API_BASE}/chapters/${surahId}?language=en`),
+      ]);
+      const arJson = await arRes.json();
+      const trJson = await trRes.json();
+      const chJson = await chRes.json();
 
-        const indopakVerses: IndopakVerse[] = arJson.verses || [];
-        const translationVerses: TranslationVerse[] = trJson.translations || [];
-        const chapter: ChapterInfo = chJson.chapter;
+      const indopakVerses: IndopakVerse[] = arJson.verses || [];
+      const translationVerses: TranslationVerse[] = trJson.translations || [];
+      const chapter: ChapterInfo = chJson.chapter;
 
-        const arabicAyahs = indopakVerses.map((v) => ({
-          number: v.id,
-          text: v.text_indopak_nastaleeq,
-          numberInSurah: parseInt(v.verse_key.split(':')[1], 10),
-          juz: 0,
-        }));
-        const stripHtml = (s: string) => s.replace(/<sup[^>]*>.*?<\/sup>/gi, '').replace(/<[^>]*>/g, '');
-        const enAyahs = translationVerses.map((v, i) => ({
-          number: i + 1,
-          text: stripHtml(v.text),
-          numberInSurah: arabicAyahs[i]?.numberInSurah || i + 1,
-          juz: 0,
-        }));
+      const arabicAyahs = indopakVerses.map((v) => ({
+        number: v.id,
+        text: v.text_indopak_nastaleeq,
+        numberInSurah: parseInt(v.verse_key.split(':')[1], 10),
+        juz: 0,
+      }));
+      const stripHtml = (s: string) => s.replace(/<sup[^>]*>.*?<\/sup>/gi, '').replace(/<[^>]*>/g, '');
+      const enAyahs = translationVerses.map((v, i) => ({
+        number: i + 1,
+        text: stripHtml(v.text),
+        numberInSurah: arabicAyahs[i]?.numberInSurah || i + 1,
+        juz: 0,
+      }));
 
-        setArabic(arabicAyahs);
-        setTranslation(enAyahs);
-        const name = chapter?.name_simple || `Surah ${surahId}`;
-        const nameAr = chapter?.name_arabic || '';
-        setSurahName(name);
-        setSurahNameAr(nameAr);
-        cacheSurah(surahId, { arabic: arabicAyahs, translation: enAyahs, surahName: name, surahNameAr: nameAr });
-      } catch {
-        setArabic([]);
-        setTranslation([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+      setArabic(arabicAyahs);
+      setTranslation(enAyahs);
+      const name = chapter?.name_simple || `Surah ${surahId}`;
+      const nameAr = chapter?.name_arabic || '';
+      setSurahName(name);
+      setSurahNameAr(nameAr);
+      cacheSurah(surahId, { arabic: arabicAyahs, translation: enAyahs, surahName: name, surahNameAr: nameAr });
+    } catch {
+      setError('Failed to load this Surah. Check your internet connection.');
+    } finally {
+      setLoading(false);
+    }
   }, [surahId]);
+
+  useEffect(() => { fetchSurah(); }, [fetchSurah]);
 
   useEffect(() => {
     (async () => {
@@ -179,6 +181,18 @@ export default function QuranReaderScreen() {
     return (
       <LinearGradient colors={t.bg} style={styles.container}>
         <ActivityIndicator color={COLORS.primary} size="large" style={{ flex: 1 }} />
+      </LinearGradient>
+    );
+  }
+
+  if (error) {
+    return (
+      <LinearGradient colors={t.bg} style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="cloud-offline-outline" size={48} color={t.secondary} />
+        <Text style={[styles.emptyText, { color: t.secondary, textAlign: 'center', marginTop: 12, marginBottom: 20 }]}>{error}</Text>
+        <TouchableOpacity onPress={fetchSurah} activeOpacity={0.8} style={{ backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}>
+          <Text style={{ color: COLORS.textOnPrimary, fontWeight: '700', fontSize: 14 }}>Retry</Text>
+        </TouchableOpacity>
       </LinearGradient>
     );
   }
@@ -240,7 +254,7 @@ export default function QuranReaderScreen() {
                   <Ionicons name={isBm ? 'bookmark' : 'bookmark-outline'} size={18} color={isBm ? COLORS.primary : t.secondary} />
                 </TouchableOpacity>
               </View>
-              <Text style={[styles.ayahArabic, { color: t.text, fontSize: fs.arabic, lineHeight: fs.arabic * 1.7, fontFamily: 'IndopakNastaleeq' }]} rightToLeft>
+              <Text style={[styles.ayahArabic, { color: t.text, fontSize: fs.arabic, lineHeight: fs.arabic * 1.7, fontFamily: 'IndopakNastaleeq', writingDirection: 'rtl' }]}>
                 {item.text}
               </Text>
               <Text style={[styles.ayahTranslation, { color: t.secondary, fontSize: fs.translation, borderTopColor: t.border }]}>{enText}</Text>

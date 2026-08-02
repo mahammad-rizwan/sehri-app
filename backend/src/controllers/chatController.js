@@ -2,6 +2,8 @@ const { Op } = require('sequelize');
 const { ChatGroup, ChatGroupMember, ChatMessage, Admin, User, SuperAdmin } = require('../models');
 const { success, error, paginated } = require('../utils/response');
 const logger = require('../utils/logger');
+const { sendPushNotification } = require('../services/expoPushService');
+const { getIO } = require('../services/socketService');
 
 /**
  * POST /chat/groups — Create a chat group (super_admin only)
@@ -268,6 +270,37 @@ const sendMessage = async (req, res) => {
 
     await ChatGroup.update({ updatedAt: new Date() }, { where: { id: req.params.id } });
 
+    // Emit via Socket.IO for live delivery
+    try {
+      getIO().to(`group:${req.params.id}`).emit('new-message', msg);
+    } catch (e) {
+      logger.warn('Socket emit failed for new-message:', e.message);
+    }
+
+    // Notify all group members except the sender
+    const allMembers = await ChatGroupMember.findAll({
+      where: {
+        group_id: req.params.id,
+        [Op.not]: [{ user_id: req.user.id, user_type: req.userRole }],
+      },
+    });
+
+    const group = await ChatGroup.findByPk(req.params.id, { attributes: ['name'] });
+    const notifTitle = `💬 ${group?.name || 'Chat'}`;
+    const notifBody = `${req.user.name}: ${message.trim().substring(0, 80)}`;
+
+    for (const member of allMembers) {
+      let person = null;
+      if (member.user_type === 'admin') person = await Admin.findByPk(member.user_id, { attributes: ['fcm_token'] });
+      else if (member.user_type === 'super_admin') person = await SuperAdmin.findByPk(member.user_id, { attributes: ['fcm_token'] });
+      else if (member.user_type === 'user') person = await User.findByPk(member.user_id, { attributes: ['fcm_token'] });
+
+      if (person?.fcm_token) {
+        sendPushNotification(person.fcm_token, notifTitle, notifBody, { screen: 'chat', groupId: req.params.id })
+          .catch((e) => logger.warn(`Chat push failed for ${member.user_id}: ${e.message}`));
+      }
+    }
+
     return success(res, msg, 'Message sent', 201);
   } catch (err) {
     logger.error('sendMessage error:', err);
@@ -293,6 +326,13 @@ const deleteMessage = async (req, res) => {
     }
 
     await msg.destroy();
+
+    try {
+      getIO().to(`group:${req.params.id}`).emit('delete-message', { msgId: req.params.msgId, groupId: req.params.id });
+    } catch (e) {
+      logger.warn('Socket emit failed for delete-message:', e.message);
+    }
+
     return success(res, null, 'Message deleted');
   } catch (err) {
     logger.error('deleteMessage error:', err);

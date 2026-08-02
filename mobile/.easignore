@@ -1,0 +1,27 @@
+# APK files - no need to upload old builds
+*.apk
+*.aab
+
+# Expo web cache
+.expo/web/cache/
+
+# Node modules (EAS installs these fresh)
+node_modules/
+
+# Logs
+*.log
+
+# Android/iOS build artifacts
+android/
+ios/
+
+# Dist folder
+dist/
+
+# IDE files
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

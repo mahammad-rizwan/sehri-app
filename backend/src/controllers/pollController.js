@@ -1,4 +1,5 @@
 ﻿const { Poll, PollResponse, User } = require('../models');
+const { sendPollEnabledNotification, sendPollDisabledNotification } = require('../services/expoPushService');
 const { success, error } = require('../utils/response');
 const { sequelize } = require('../database/connection');
 const logger = require('../utils/logger');
@@ -65,24 +66,23 @@ function isPollWindowOpen() {
   return istHour >= 22 || istHour < 10;
 }
 
-// Find or create poll by date — is_active auto-syncs with time window.
-// If super admin overrides, the override persists only within the current
-// time window. When the window flips (10 AM or 10 PM), auto-sync resumes.
+// Find or create poll by date — uses findOrCreate to prevent race condition
+// duplicate entry errors when multiple requests hit simultaneously.
 async function findOrCreatePoll(dateStr) {
-  let poll = await Poll.findOne({ where: { date: dateStr } });
-  if (!poll) {
-    poll = await Poll.create({
-      date: dateStr,
+  const [poll, created] = await Poll.findOrCreate({
+    where: { date: dateStr },
+    defaults: {
       question: 'Will you be having Sehri food?',
       is_active: isPollWindowOpen(),
-    });
-  } else {
+    },
+  });
+
+  if (!created) {
+    // Poll already existed — sync is_active with time window unless manually overridden
     const shouldBeOpen = isPollWindowOpen();
 
     if (poll.deadline_time) {
       // Manual override exists — check if the time window has transitioned
-      // since the override was applied. deadline_time stores the IST hour
-      // (e.g. "14:00:00") when the override was set.
       const overrideHour = parseInt(poll.deadline_time.split(':')[0], 10);
       const wasWindowOpen = overrideHour >= 22 || overrideHour < 10;
 
@@ -104,6 +104,7 @@ async function findOrCreatePoll(dateStr) {
       }
     }
   }
+
   return poll;
 }
 
@@ -537,6 +538,17 @@ const toggleActivePoll = async (req, res) => {
     await currentPoll.update({ is_active: newState, deadline_time: `${overrideHour}:00:00` });
 
     logger.info(`Poll ${dateStr} manually set to is_active=${newState} by super admin ${req.user.id}`);
+
+    try {
+      if (newState) {
+        await sendPollEnabledNotification(dateStr);
+      } else {
+        await sendPollDisabledNotification(dateStr);
+      }
+    } catch (err) {
+      logger.error('sendPollNotification error:', err.message);
+    }
+
     return success(res, {
       date: dateStr,
       displayLabel: displayLabel(dateStr),

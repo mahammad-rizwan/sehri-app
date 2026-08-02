@@ -44,6 +44,9 @@ export default function AdminDashboard() {
       if (liveActive !== undefined) setPollActive(liveActive);
       if (isSuperAdmin) {
         try { const donRes = await api.get(ENDPOINTS.DONATION_SUMMARY); setDonationSummary(donRes.data.data); } catch {}
+      } else {
+        // Admin can see totals but not full history
+        try { const donRes = await api.get(ENDPOINTS.DONATION_SUMMARY); setDonationSummary(donRes.data.data); } catch {}
       }
     } catch {}
   };
@@ -157,7 +160,32 @@ export default function AdminDashboard() {
 
           {isSuperAdmin && donationSummary && (
             <PremiumCard style={styles.card}>
-              <Text style={styles.cardTitle}>💰 Donations Today</Text>
+              <Text style={styles.cardTitle}>💰 Donations</Text>
+              <View style={styles.donationRow}>
+                <LinearGradient colors={['rgba(201,168,76,0.12)', 'rgba(201,168,76,0.03)']} style={styles.donationCard}>
+                  <Text style={styles.donationAmount}>₹{Number(donationSummary.total_amount || 0).toLocaleString()}</Text>
+                  <Text style={styles.donationLabel}>Total Collected</Text>
+                </LinearGradient>
+                <LinearGradient colors={['rgba(79,195,247,0.12)', 'rgba(79,195,247,0.03)']} style={styles.donationCard}>
+                  <Text style={[styles.donationAmount, { color: COLORS.accent }]}>{donationSummary.total_donations}</Text>
+                  <Text style={styles.donationLabel}>Donations</Text>
+                </LinearGradient>
+              </View>
+              <TouchableOpacity
+                style={styles.viewDonationsBtn}
+                onPress={() => router.push('/(app)/admin/donation-history' as any)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="receipt-outline" size={15} color={COLORS.primary} />
+                <Text style={styles.viewDonationsBtnText}>View Donation History</Text>
+                <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+              </TouchableOpacity>
+            </PremiumCard>
+          )}
+
+          {!isSuperAdmin && donationSummary && (
+            <PremiumCard style={styles.card}>
+              <Text style={styles.cardTitle}>💰 Donations</Text>
               <View style={styles.donationRow}>
                 <LinearGradient colors={['rgba(201,168,76,0.12)', 'rgba(201,168,76,0.03)']} style={styles.donationCard}>
                   <Text style={styles.donationAmount}>₹{Number(donationSummary.total_amount || 0).toLocaleString()}</Text>
@@ -389,6 +417,13 @@ const styles = StyleSheet.create({
   donationCard: { flex: 1, borderRadius: SIZES.radius.md, padding: SIZES.spacing.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
   donationAmount: { color: COLORS.primary, fontSize: SIZES.lg, fontWeight: '800', textAlign: 'center' },
   donationLabel: { color: COLORS.textSecondary, fontSize: SIZES.xs, textAlign: 'center', marginTop: 2 },
+  viewDonationsBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: SIZES.spacing.md, paddingVertical: 10, paddingHorizontal: 14,
+    backgroundColor: 'rgba(201,168,76,0.08)', borderRadius: SIZES.radius.md,
+    borderWidth: 1, borderColor: 'rgba(201,168,76,0.25)', alignSelf: 'stretch',
+  },
+  viewDonationsBtnText: { color: COLORS.primary, fontSize: SIZES.sm, fontWeight: '700', flex: 1 },
   sectionTitle: { color: COLORS.textPrimary, fontSize: SIZES.md, fontWeight: '700', marginTop: SIZES.spacing.md, marginBottom: SIZES.spacing.sm },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   actionCard: { width: '47%', borderRadius: SIZES.radius.lg, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },

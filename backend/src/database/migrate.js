@@ -403,13 +403,78 @@ const migrate = async () => {
     // 18. Drop role column from users table (if it exists)
     try {
       await queryInterface.removeColumn('users', 'role');
-      logger.info('✅ Dropped role column from users table');
+      logger.info('�o. Dropped role column from users table');
     } catch (err) {
       if (err.parent?.code === 'ER_CANT_DROP_FIELD_OR_KEY') {
-        logger.info('ℹ️ role column already removed from users table');
+        logger.info('�,1�,? role column already removed from users table');
       } else {
-        logger.warn('⚠️ Could not drop role column:', err.message);
+        logger.warn('�s��,? Could not drop role column:', err.message);
       }
+    }
+
+    // 19. Donations table - replace Razorpay schema with proof-of-payment flow
+    for (const col of ['razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature']) {
+      try {
+        const [exists] = await sequelize.query(
+          "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'donations' AND COLUMN_NAME = ?;",
+          { replacements: [col] }
+        );
+        if (exists[0].c > 0) {
+          await sequelize.query(`ALTER TABLE \`donations\` DROP COLUMN \`${col}\`;`);
+          logger.info(`✅ Dropped ${col} from donations`);
+        }
+      } catch (err) {
+        logger.warn(`⚠️ Could not drop ${col}:`, err.message);
+      }
+    }
+
+    try {
+      await sequelize.query(
+        "ALTER TABLE `donations` MODIFY COLUMN `amount` DECIMAL(10,2) NULL;"
+      );
+      logger.info('✅ Made donations.amount nullable');
+    } catch (err) {
+      logger.warn('⚠️ Could not update donations.amount:', err.message);
+    }
+
+    try {
+      await sequelize.query(
+        "ALTER TABLE `donations` MODIFY COLUMN `status` ENUM('created','paid','failed','refunded','pending','rejected') NOT NULL DEFAULT 'pending';"
+      );
+      await sequelize.query(
+        "UPDATE `donations` SET `status` = 'rejected' WHERE `status` IN ('created','failed','refunded');"
+      );
+      await sequelize.query(
+        "ALTER TABLE `donations` MODIFY COLUMN `status` ENUM('pending','paid','rejected') NOT NULL DEFAULT 'pending';"
+      );
+      logger.info('✅ Updated donations status ENUM');
+    } catch (err) {
+      logger.warn('⚠️ Could not update donations status ENUM:', err.message);
+    }
+
+    try {
+      await queryInterface.addColumn('donations', 'proof_url', {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+      });
+      logger.info('✅ Added proof_url column to donations');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ proof_url column already exists');
+      } else throw err;
+    }
+
+    // 20. Add verified_at to otps - records when an OTP was successfully verified
+    try {
+      await queryInterface.addColumn('otps', 'verified_at', {
+        type: DataTypes.DATE,
+        allowNull: true,
+      });
+      logger.info('✅ Added verified_at column to otps');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ verified_at column already exists');
+      } else throw err;
     }
 
     logger.info('✅ Migration completed successfully');

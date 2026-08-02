@@ -10,3 +10,12 @@ web-build/
 
 expo-env.d.ts
 # @end expo-cli
+# EAS Build exclusions
+*.apk
+*.log
+*.txt
+*.md
+build-log.txt
+apk-build-log.txt
+apk-build-err.txt
+server-error.log

@@ -22,6 +22,7 @@ export default function TrackingScreen() {
   const [loading, setLoading]        = useState(true);
   const [selectedRider, setSelected] = useState<any>(null);
   const [mapReady, setMapReady]      = useState(false);
+  const [mapError, setMapError]      = useState(false);
 
   const webviewRef  = useRef<WebView>(null);
   const prevCoords  = useRef<{ lat: number; lng: number } | null>(null);
@@ -97,8 +98,8 @@ export default function TrackingScreen() {
           domStorageEnabled
           originWhitelist={['*']}
           mixedContentMode="always"
-          onLoadEnd={() => { setMapReady(true); prevCoords.current = null; }}
-          onError={() => setMapReady(false)}
+          onLoadEnd={() => { setMapReady(true); setMapError(false); prevCoords.current = null; }}
+          onError={() => { setMapReady(false); setMapError(true); }}
           startInLoadingState
           renderLoading={() => (
             <View style={st.loader}>
@@ -107,6 +108,13 @@ export default function TrackingScreen() {
             </View>
           )}
         />
+        {mapError && (
+          <View style={st.mapError}>
+            <Text style={{ fontSize: 40 }}>🗺️</Text>
+            <Text style={st.mapErrorTitle}>Map unavailable</Text>
+            <Text style={st.mapErrorSub}>Check your internet connection.{'\n'}Google Maps may need an unrestricted API key.</Text>
+          </View>
+        )}
       </View>
 
       {/* ══  HEADER — only title, hidden 5-tap for rider login  ══ */}
@@ -144,6 +152,15 @@ const st = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', gap: 10,
   },
   loaderTxt: { color: COLORS.primary, fontSize: SIZES.base },
+
+  mapError: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#050D16',
+    alignItems: 'center', justifyContent: 'center', gap: 8,
+    padding: 32,
+  },
+  mapErrorTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: 4 },
+  mapErrorSub: { color: '#8899AA', fontSize: 13, textAlign: 'center', lineHeight: 20 },
 
   header: {
     position: 'absolute', top: 0, left: 0, right: 0,

@@ -11,6 +11,7 @@ const ProfileEditRequest = require('./ProfileEditRequest');
 const ChatGroup = require('./ChatGroup');
 const ChatGroupMember = require('./ChatGroupMember');
 const ChatMessage = require('./ChatMessage');
+const PrayerTiming = require('./PrayerTiming');
 
 // Associations — regular users have poll responses, donations, feedback, profile edits
 User.hasMany(PollResponse, { foreignKey: 'user_id' });
@@ -49,4 +50,5 @@ module.exports = {
   ChatGroup,
   ChatGroupMember,
   ChatMessage,
+  PrayerTiming,
 };

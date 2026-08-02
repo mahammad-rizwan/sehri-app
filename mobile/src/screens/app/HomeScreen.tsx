@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, ZONE_CONFIG, RESPONSIVE, SIZES, SHADOWS } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
@@ -17,7 +18,7 @@ import Toast from 'react-native-toast-message';
 
 interface PrayerSlot { key: string; name: string; time: string; icon: string; color: string; }
 
-let prayerCache: { date: string; slots: PrayerSlot[] } | null = null;
+let prayerCache: { date: string; slots: PrayerSlot[]; date_hijri?: string } | null = null;
 
 const PRAYER_META: Record<string, { name: string; icon: string; color: string }> = {
   Tahajjud: { name: 'Tahajjud', icon: '🌌', color: '#7B68EE' },
@@ -37,23 +38,16 @@ async function fetchPrayerTimes(): Promise<PrayerSlot[]> {
   const today = new Date().toDateString();
   if (prayerCache?.date === today) return prayerCache.slots;
   try {
-    const res = await fetch('https://api.aladhan.com/v1/timingsByCity?city=Bangalore&country=India&method=1&school=1');
-    const json = await res.json();
-    const timings = json?.data?.timings;
-    if (!timings) throw new Error('No timings');
-    const clean = (t: string) => t.replace(/\s*\(.*\)/, '').trim();
-    const ishaMin = toMinutes(clean(timings.Isha));
-    const fajrMin = toMinutes(clean(timings.Fajr));
-    const nightDur = (fajrMin + 1440 - ishaMin) % 1440;
-    const tahajjudMin = (ishaMin + Math.floor(nightDur * 2 / 3)) % 1440;
-    const tahajjudTime = `${String(Math.floor(tahajjudMin / 60)).padStart(2, '0')}:${String(tahajjudMin % 60).padStart(2, '0')}`;
-    const slots: PrayerSlot[] = SHOW_KEYS.map((key) => {
-      const srcKey = key === 'Iftar' ? 'Maghrib' : key;
-      const rawTime = key === 'Tahajjud' ? tahajjudTime : clean(timings[srcKey] || '00:00');
-      return { key, name: PRAYER_META[key].name, time: rawTime, icon: PRAYER_META[key].icon, color: PRAYER_META[key].color };
-    });
-    slots.sort((a, b) => toMinutes(a.time) - toMinutes(b.time));
-    prayerCache = { date: today, slots };
+    const res = await api.get(ENDPOINTS.PRAYER_TIMINGS);
+    const data = res.data.data;
+    const slots: PrayerSlot[] = (data.slots || []).map((s: any) => ({
+      key: s.key,
+      name: PRAYER_META[s.key]?.name || s.key,
+      time: s.time,
+      icon: PRAYER_META[s.key]?.icon || '🕌',
+      color: PRAYER_META[s.key]?.color || '#C9A84C',
+    }));
+    prayerCache = { date: today, slots, date_hijri: data.date_hijri };
     return slots;
   } catch {
     const fallback: PrayerSlot[] = [
@@ -110,11 +104,11 @@ function PrayerHeroCard() {
   const [slots, setSlots] = useState<PrayerSlot[]>([]);
   const [prayerLoading, setPrayerLoading] = useState(true);
   const [nowMin, setNowMin] = useState(() => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); });
-  const hijri = getApproxHijri();
+  const [hijri, setHijri] = useState(getApproxHijri());
   const gregorian = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   useEffect(() => {
-    fetchPrayerTimes().then((s) => { setSlots(s); setPrayerLoading(false); });
+    fetchPrayerTimes().then((s) => { setSlots(s); if (prayerCache?.date_hijri) setHijri(prayerCache.date_hijri); setPrayerLoading(false); });
     const t = setInterval(() => { const n = new Date(); setNowMin(n.getHours() * 60 + n.getMinutes()); }, 60000);
     return () => clearInterval(t);
   }, []);
@@ -281,6 +275,8 @@ export default function HomeScreen() {
   const [zoneYesCount, setZoneYesCount] = useState(0);
   const [pollDisplayLabel, setPollDisplayLabel] = useState('');
   const [pollWindowOpen, setPollWindowOpen] = useState(false);
+  const [donationTotal, setDonationTotal] = useState(0);
+  const [donationCount, setDonationCount] = useState(0);
   const [isSpecialCase, setIsSpecialCase] = useState(false);
   const [specialCaseType, setSpecialCaseType] = useState<string | null>(null);
   const [specialCaseLoading, setSpecialCaseLoading] = useState(false);
@@ -305,9 +301,20 @@ export default function HomeScreen() {
       setIsSpecialCase(d.isSpecialCase || false);
       setSpecialCaseType(d.specialCaseType || null);
     } catch {}
-  }, []);
+    // Only super admins can see donation summary — skip for regular users
+    if (user?.role === 'super_admin') {
+      try {
+        const donRes = await api.get(ENDPOINTS.DONATION_SUMMARY);
+        setDonationTotal(donRes.data.data.total_amount || 0);
+        setDonationCount(donRes.data.data.total_donations || 0);
+      } catch {}
+    }
+  }, [user?.role]);
 
   useEffect(() => { loadData(); }, []);
+
+  // Auto-refresh when screen comes into focus (poll toggle, etc.)
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
@@ -376,8 +383,8 @@ export default function HomeScreen() {
             <IslamicGeometric opacity={0.07} size={RESPONSIVE.width * 0.9} />
             <View style={styles.headerContent}>
               <View style={styles.greetingBlock}>
-                <Text style={styles.assalam}>Assalamualaikum 🙏</Text>
-                <Text style={styles.fullName}>{user?.name || 'Friend'}</Text>
+                <Text style={styles.assalam}>Assalamualaikum</Text>
+                <Text style={styles.fullName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{user?.name || 'Friend'}</Text>
                 {zoneInfo && (
                   <View style={[styles.zoneBadge, { borderColor: zoneInfo.color }]}>
                     <Text style={styles.zoneEmoji}>{zoneInfo.emoji}</Text>
@@ -411,6 +418,23 @@ export default function HomeScreen() {
             <LinearGradient colors={['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.01)']} style={styles.pollSkeleton}>
               <ActivityIndicator color={COLORS.primary} size="small" />
               <Text style={styles.skeletonText}>Loading poll...</Text>
+            </LinearGradient>
+          )}
+
+          {donationTotal > 0 && (
+            <LinearGradient colors={['rgba(201,168,76,0.12)', 'rgba(201,168,76,0.03)']} style={hs.donationHomeCard}>
+              <Text style={hs.donationHomeLabel}>💰 Total Donations Collected</Text>
+              <Text style={hs.donationHomeAmount}>₹{Number(donationTotal).toLocaleString()}</Text>
+              {donationCount > 0 && <Text style={hs.donationHomeSub}>{donationCount} donations</Text>}
+              {user?.role === 'super_admin' && (
+                <TouchableOpacity
+                  style={hs.viewDonationsBtn}
+                  onPress={() => router.push('/(app)/admin/donation-history' as any)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={hs.viewDonationsText}>View Donations →</Text>
+                </TouchableOpacity>
+              )}
             </LinearGradient>
           )}
 
@@ -500,8 +524,8 @@ const styles = StyleSheet.create({
   header: { paddingTop: RESPONSIVE.hp(7), paddingBottom: 16, overflow: 'hidden' },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, marginTop: 8 },
   greetingBlock: { flex: 1, marginRight: 12 },
-  assalam: { color: COLORS.primary, fontSize: 13, fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
-  fullName: { color: COLORS.textPrimary, fontSize: RESPONSIVE.isSmall ? 20 : 24, fontWeight: '800', lineHeight: 30 },
+  assalam: { color: COLORS.primary, fontSize: 14, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
+  fullName: { color: COLORS.textPrimary, fontSize: RESPONSIVE.isSmall ? 15 : 17, fontWeight: '700', lineHeight: 22 },
   zoneBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start', gap: 4 },
   zoneEmoji: { fontSize: 12 },
   zoneText: { fontSize: 11, fontWeight: '700' },
@@ -584,4 +608,10 @@ const hs = StyleSheet.create({
   zoneCountLabel: { color: COLORS.textSecondary, fontSize: 11 },
   viewVotersBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   viewVotersText: { color: COLORS.primary, fontSize: 13, fontWeight: '600' },
+  donationHomeCard: { borderRadius: 20, padding: 16, marginTop: 16, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(201,168,76,0.25)', ...SHADOWS.md },
+  donationHomeLabel: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
+  donationHomeAmount: { color: COLORS.primary, fontSize: 32, fontWeight: '800', marginTop: 4 },
+  donationHomeSub: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
+  viewDonationsBtn: { marginTop: 12, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.primary, backgroundColor: 'rgba(201,168,76,0.1)' },
+  viewDonationsText: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
 });

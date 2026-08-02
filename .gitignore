@@ -13,3 +13,7 @@ Thumbs.db
 *.swp
 *.swo
 CREDENTIALS.txt
+
+.idea/
+google-services.json
+

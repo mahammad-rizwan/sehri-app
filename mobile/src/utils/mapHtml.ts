@@ -149,6 +149,14 @@ function updatePin(lat,lng){
 }
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&callback=initMap" async defer></script>
+<script>
+  // Show error if Maps fails to load after 8 seconds
+  setTimeout(function() {
+    if (typeof google === 'undefined') {
+      document.getElementById('map').innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;background:#050D16;color:#8899AA;font-family:sans-serif;padding:20px;text-align:center"><div style=\\"font-size:40px;margin-bottom:12px\\">🗺️</div><div style=\\"font-size:15px;margin-bottom:8px;color:#fff\\">Map unavailable</div><div style=\\"font-size:12px\\">Check internet connection or Maps API key</div></div>';
+    }
+  }, 8000);
+</script>
 </body>
 </html>`;
 }

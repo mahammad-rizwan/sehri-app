@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Alert, ScrollView, BackHandler,
+  Alert, ScrollView, BackHandler, ActivityIndicator, Platform, Linking,
 } from 'react-native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
@@ -27,11 +27,12 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     if (!riderId || !token) return;
 
     await fetch(`${API_BASE_URL}/tracking/${riderId}/push-location`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
+            Authorization: `Bearer ${token}`,
+          },
       body: JSON.stringify({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
@@ -45,11 +46,12 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 export default function BroadcastScreen() {
   const router = useRouter();
 
-  const [riderId, setRiderId]       = useState<string | null>(null);
-  const [isTracking, setIsTracking] = useState(false);
-  const [lastPush, setLastPush]     = useState<string | null>(null);
-  const [coords, setCoords]         = useState<{ lat: number; lng: number } | null>(null);
-  const [pushError, setPushError]   = useState<string | null>(null);
+  const [riderId, setRiderId]         = useState<string | null>(null);
+  const [isTracking, setIsTracking]   = useState(false);
+  const [isStarting, setIsStarting]   = useState(false);  // loading state while permissions/GPS init
+  const [lastPush, setLastPush]       = useState<string | null>(null);
+  const [coords, setCoords]           = useState<{ lat: number; lng: number } | null>(null);
+  const [pushError, setPushError]     = useState<string | null>(null);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -99,6 +101,7 @@ export default function BroadcastScreen() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
           Authorization: `Bearer ${await SecureStore.getItemAsync('accessToken')}`,
         },
         body: JSON.stringify({ latitude, longitude, status: 'delivering' }),
@@ -123,43 +126,92 @@ export default function BroadcastScreen() {
       return;
     }
 
-    const fg = await Location.requestForegroundPermissionsAsync();
-    if (!fg.granted) {
-      Alert.alert('Permission Required', 'Location access is needed for live tracking.');
-      return;
-    }
-
-    const bg = await Location.requestBackgroundPermissionsAsync();
-    if (!bg.granted) {
-      Alert.alert(
-        'Background Permission Required',
-        'Please allow "Always" location access so tracking continues when you switch apps.',
-      );
-      return;
-    }
-
-    setIsTracking(true);
+    setIsStarting(true);
     setPushError(null);
 
-    // Push immediately
-    await pushGPS(riderId);
-
-    // Start background location updates
     try {
-      await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-        accuracy: Location.Accuracy.High,
-        timeInterval: 20000,
-        distanceInterval: 0,
-        showsBackgroundLocationIndicator: true,
-        foregroundService: {
-          notificationTitle: 'Sehri Connect',
-          notificationBody: 'Broadcasting your location…',
-          notificationColor: '#C9A84C',
-        },
-      });
-    } catch {
-      // Fallback: use interval if background fails
-      intervalRef.current = setInterval(() => pushGPS(riderId), 20000);
+      // 1. Check device GPS/location services are actually on
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        Alert.alert(
+          'GPS is Off',
+          'Please enable Location/GPS on your device from Settings, then try again.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                if (Platform.OS === 'android') {
+                  Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+                } else {
+                  Linking.openURL('app-settings:');
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      // 2. Request foreground (while-in-use) permission
+      const fg = await Location.requestForegroundPermissionsAsync();
+      if (fg.status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Location access is needed for live tracking. Please allow it in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+
+      // 3. Request background (always) permission
+      //    On Android 10+ this opens the system settings page — the dialog itself
+      //    is handled by the OS, so we just check the result afterwards.
+      const bg = await Location.requestBackgroundPermissionsAsync();
+      if (bg.status !== 'granted') {
+        // Background denied — we still track but warn the app will pause in background
+        Alert.alert(
+          'Background Location Denied',
+          'Tracking will pause when you leave the app. For uninterrupted delivery updates, go to Settings → App → Location → set to "Allow all the time".',
+          [{ text: 'Continue Anyway' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }],
+        );
+        // Continue with foreground-only tracking via interval fallback below
+      }
+
+      setIsTracking(true);
+
+      // 4. Push first location immediately so server shows live right away
+      await pushGPS(riderId);
+
+      // 5. Start background location updates (foreground service keeps it alive)
+      const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => false);
+      if (!alreadyStarted) {
+        try {
+          await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 20000,
+            distanceInterval: 0,
+            showsBackgroundLocationIndicator: true,
+            foregroundService: {
+              notificationTitle: 'Sehri Connect – Live Delivery',
+              notificationBody: 'Broadcasting your location to users…',
+              notificationColor: '#C9A84C',
+            },
+            pausesUpdatesAutomatically: false,
+          });
+        } catch (bgErr) {
+          // Background task failed (e.g. bg permission denied) — fall back to interval
+          intervalRef.current = setInterval(() => pushGPS(riderId), 20000);
+        }
+      }
+    } catch (err: any) {
+      setPushError(err?.message ?? 'Could not start tracking. Make sure GPS is on.');
+      setIsTracking(false);
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -175,6 +227,7 @@ export default function BroadcastScreen() {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
             Authorization: `Bearer ${await SecureStore.getItemAsync('accessToken')}`,
           },
           body: JSON.stringify({
@@ -257,14 +310,28 @@ export default function BroadcastScreen() {
 
         {/* Start / Stop */}
         {!isTracking ? (
-          <TouchableOpacity style={st.startBtn} onPress={startTracking} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={[st.startBtn, isStarting && { opacity: 0.7 }]}
+            onPress={startTracking}
+            activeOpacity={0.85}
+            disabled={isStarting}
+          >
             <LinearGradient
               colors={[COLORS.accentGreen, '#2e7d32']}
               style={st.btnGrad}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             >
-              <Ionicons name="navigate" size={22} color="#fff" />
-              <Text style={st.btnTxt}>Start Broadcasting</Text>
+              {isStarting ? (
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={st.btnTxt}>Starting…</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="navigate" size={22} color="#fff" />
+                  <Text style={st.btnTxt}>Start Broadcasting</Text>
+                </>
+              )}
             </LinearGradient>
           </TouchableOpacity>
         ) : (

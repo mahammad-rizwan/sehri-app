@@ -24,6 +24,10 @@ const Admin = sequelize.define('Admin', {
     type: DataTypes.ENUM('masjid', 'boys_hostel', 'stanza', 'girls'),
     allowNull: false,
   },
+  fcm_token: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
 }, {
   tableName: 'admins',
   timestamps: true,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, Platform, Modal, Alert,
@@ -73,6 +73,7 @@ export default function DuaListScreen() {
   const [duas, setDuas] = useState<Dua[]>([]);
   const [categoryInfo, setCategoryInfo] = useState<CategoryInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<number>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
 
@@ -85,30 +86,32 @@ export default function DuaListScreen() {
     }, []),
   );
 
-  useEffect(() => {
-    (async () => {
-      const cached = await getCachedDuas(categoryId);
-      if (cached) {
-        setDuas(cached.duas || []);
-        setCategoryInfo(cached.categoryInfo || null);
-        setLoading(false);
-        return;
-      }
-      try {
-        const res = await fetch(`${API_BASE}/duas/category/${categoryId}`);
-        const json = await res.json();
-        const d: Dua[] = json.data?.duas || [];
-        const ci = json.data?.category || null;
-        setDuas(d);
-        setCategoryInfo(ci);
-        setCachedDuas(categoryId, { duas: d, categoryInfo: ci });
-      } catch {
-        setDuas([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const fetchDuas = useCallback(async () => {
+    const cached = await getCachedDuas(categoryId);
+    if (cached) {
+      setDuas(cached.duas || []);
+      setCategoryInfo(cached.categoryInfo || null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/duas/category/${categoryId}`);
+      const json = await res.json();
+      const d: Dua[] = json.data?.duas || [];
+      const ci = json.data?.category || null;
+      setDuas(d);
+      setCategoryInfo(ci);
+      setCachedDuas(categoryId, { duas: d, categoryInfo: ci });
+    } catch {
+      setError('Failed to load duas. Check your internet connection.');
+    } finally {
+      setLoading(false);
+    }
   }, [categoryId]);
+
+  useEffect(() => { fetchDuas(); }, [fetchDuas]);
 
   const handleBookmark = async (dua: Dua) => {
     const bm: DuaBookmark = {
@@ -171,6 +174,18 @@ export default function DuaListScreen() {
     return (
       <LinearGradient colors={t.bg} style={styles.container}>
         <ActivityIndicator color={COLORS.primary} size="large" style={{ flex: 1 }} />
+      </LinearGradient>
+    );
+  }
+
+  if (error) {
+    return (
+      <LinearGradient colors={t.bg} style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="cloud-offline-outline" size={48} color={t.secondary} />
+        <Text style={[styles.emptyText, { color: t.secondary, textAlign: 'center', marginTop: 12, marginBottom: 20 }]}>{error}</Text>
+        <TouchableOpacity onPress={fetchDuas} activeOpacity={0.8} style={{ backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}>
+          <Text style={{ color: COLORS.textOnPrimary, fontWeight: '700', fontSize: 14 }}>Retry</Text>
+        </TouchableOpacity>
       </LinearGradient>
     );
   }
