@@ -163,21 +163,39 @@ function PrayerHeroCard() {
 
 function TomorrowPollCard({
   poll, userResponse, zoneYesCount, pollLoading,
-  sehriDateLabel, isWindowOpen, isSpecialCase, specialCaseType,
-  specialCaseLoading, onVote, onSpecialCase, onUndoSpecialCase, onViewVoters,
+  sehriDateLabel, phase, isSpecialCase, specialCaseType,
+  specialCaseLoading, sehriStatus, sehriStatusLoading,
+  onVote, onSpecialCase, onUndoSpecialCase, onViewVoters,
 }: {
   poll: any; userResponse: string | null; zoneYesCount: number; pollLoading: boolean;
-  sehriDateLabel: string; isWindowOpen: boolean; isSpecialCase: boolean;
+  sehriDateLabel: string; phase: string; isSpecialCase: boolean;
   specialCaseType: string | null; specialCaseLoading: boolean;
+  sehriStatus: any; sehriStatusLoading: boolean;
   onVote: (r: 'yes' | 'no') => void; onSpecialCase: (t: 'want' | 'dont_want') => void;
   onUndoSpecialCase: () => void; onViewVoters: () => void;
 }) {
-  const open = isWindowOpen;
+  const open = phase === 'voting';
+  const inSpecialWindow = phase === 'special_case';
   const showDontWant = open && userResponse === 'yes';
   const showWantSehri = open && userResponse !== 'yes';
-  const showSpecialDontWant = !open && userResponse === 'yes' && specialCaseType !== 'dont_want';
-  const showSpecialWant = !open && userResponse !== 'yes' && specialCaseType !== 'want';
-  const showUndoSpecialCase = isSpecialCase;
+  const showSpecialDontWant = inSpecialWindow && userResponse === 'yes' && specialCaseType !== 'dont_want';
+  const showSpecialWant = inSpecialWindow && userResponse !== 'yes' && specialCaseType !== 'want';
+  const showUndoSpecialCase = inSpecialWindow && isSpecialCase;
+
+  const pillLabel =
+    open ? 'Open' :
+    phase === 'special_case' ? 'Special Case' :
+    phase === 'allotment' ? 'Confirming' :
+    phase === 'status' ? 'Sehri Status' : 'Closed';
+
+  const pillColor = open ? COLORS.accentGreen : (phase === 'status' ? COLORS.primary : COLORS.accentOrange);
+
+  const status = sehriStatus?.status;
+  const statusStyle =
+    status === 'confirmed' ? { bg: 'rgba(76,175,80,0.12)', border: 'rgba(76,175,80,0.4)', color: COLORS.accentGreen, icon: '✅' } :
+    status === 'no' ? { bg: 'rgba(239,83,80,0.12)', border: 'rgba(239,83,80,0.4)', color: COLORS.accentRed, icon: '❌' } :
+    status === 'pending' ? { bg: 'rgba(255,152,0,0.12)', border: 'rgba(255,152,0,0.4)', color: COLORS.accentOrange, icon: '⏳' } :
+    { bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.15)', color: COLORS.textSecondary, icon: '—' };
 
   return (
     <LinearGradient colors={['rgba(26,46,69,0.8)', 'rgba(21,35,54,0.9)']} style={hs.pollCard}>
@@ -190,13 +208,11 @@ function TomorrowPollCard({
           </View>
         </View>
         <LinearGradient
-          colors={open ? ['rgba(76,175,80,0.2)', 'rgba(76,175,80,0.05)'] : ['rgba(255,152,0,0.2)', 'rgba(255,152,0,0.05)']}
-          style={[hs.statusPill, { borderColor: open ? 'rgba(76,175,80,0.5)' : 'rgba(255,152,0,0.5)' }]}
+          colors={[`${pillColor}33`, `${pillColor}0D`]}
+          style={[hs.statusPill, { borderColor: `${pillColor}80` }]}
         >
-          <View style={[hs.statusDot, { backgroundColor: open ? COLORS.accentGreen : COLORS.accentOrange }]} />
-          <Text style={[hs.statusText, { color: open ? COLORS.accentGreen : COLORS.accentOrange }]}>
-            {open ? 'Open' : 'Closed'}
-          </Text>
+          <View style={[hs.statusDot, { backgroundColor: pillColor }]} />
+          <Text style={[hs.statusText, { color: pillColor }]}>{pillLabel}</Text>
         </LinearGradient>
       </View>
 
@@ -219,17 +235,17 @@ function TomorrowPollCard({
         </View>
       )}
 
-      {!open && (
+      {phase === 'special_case' && (
         <View style={hs.specialCaseSection}>
           <View style={hs.specialCaseHeader}>
             <Ionicons name="alert-circle-outline" size={15} color={COLORS.accentOrange} />
             <Text style={hs.specialCaseLabel}>Special Case</Text>
-            <Text style={hs.specialCaseText}>Voting window is closed</Text>
+            <Text style={hs.specialCaseText}>Window open: 10:00 AM — 5:00 PM</Text>
           </View>
           {isSpecialCase && (
             <View style={hs.specialCaseBadge}>
               <Text style={hs.specialCaseText}>
-                {specialCaseType === 'want' ? '✅ You requested Sehri outside window' : '❌ Opted out outside window'}
+                {specialCaseType === 'want' ? '✅ You requested Sehri — admin will confirm at 5 PM' : '❌ Opted out — no Sehri'}
               </Text>
             </View>
           )}
@@ -245,9 +261,96 @@ function TomorrowPollCard({
           {!showSpecialWant && !showSpecialDontWant && !isSpecialCase && (
             <View style={hs.closedNotice}>
               <Ionicons name="lock-closed-outline" size={13} color={COLORS.textMuted} />
-              <Text style={hs.closedText}>Voting opens at 10:00 PM tonight</Text>
+              <Text style={hs.closedText}>No special case options available</Text>
             </View>
           )}
+        </View>
+      )}
+
+      {phase === 'allotment' && (
+        <View style={hs.specialCaseSection}>
+          <View style={hs.specialCaseHeader}>
+            <Ionicons name="time-outline" size={15} color={COLORS.accentOrange} />
+            <Text style={hs.specialCaseLabel}>Sehri Confirmation</Text>
+          </View>
+          <View style={hs.closedNotice}>
+            <Text style={hs.closedText}>
+              {isSpecialCase && specialCaseType === 'want'
+                ? '⏳ Your request is being reviewed. The admin will confirm your Sehri between 5–6 PM.'
+                : 'Final Sehri status will be shown at 6:00 PM.'}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {phase === 'status' && (
+        <View>
+          {sehriStatusLoading ? (
+            <View style={[hs.voteStatus, { borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.04)' }]}>
+              <ActivityIndicator color={COLORS.primary} size="small" />
+              <Text style={[hs.voteStatusText, { color: COLORS.textSecondary }]}>Loading your Sehri status...</Text>
+            </View>
+          ) : (
+            <View style={[hs.voteStatus, { backgroundColor: statusStyle.bg, borderColor: statusStyle.border }]}>
+              <Text style={{ fontSize: 16 }}>{statusStyle.icon}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[hs.voteStatusText, { color: statusStyle.color, fontWeight: '700' }]}>
+                  {status === 'confirmed' ? 'Sehri Confirmed — your Sehri will be arranged'
+                    : status === 'no' ? 'No Sehri for you today'
+                    : status === 'pending' ? 'Awaiting confirmation'
+                    : 'No response recorded'}
+                </Text>
+                {sehriStatus?.reason ? <Text style={hs.closedText}>{sehriStatus.reason}</Text> : null}
+              </View>
+            </View>
+          )}
+
+          {sehriStatus?.zoneVoters && sehriStatus.zoneVoters.length > 0 && (
+            <View style={hs.specialCaseSection}>
+              <View style={hs.specialCaseHeader}>
+                <Ionicons name="people-outline" size={15} color={COLORS.primary} />
+                <Text style={hs.specialCaseLabel}>Who needs Sehri in your zone</Text>
+              </View>
+              {sehriStatus.zoneVoters.map((v: any) => (
+                <View key={v.id} style={hs.voterRowInline}>
+                  <View style={hs.voterAvatarInline}>
+                    <Text style={hs.voterAvatarTextInline}>{v.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={hs.voterNameInline}>{v.name}</Text>
+                    {v.address ? <Text style={hs.closedText} numberOfLines={1}>{v.address}</Text> : null}
+                  </View>
+                  <Text style={{ color: COLORS.accentGreen, fontSize: 12, fontWeight: '700' }}>✅ Sehri</Text>
+                </View>
+              ))}
+            </View>
+          )}
+          {sehriStatus?.zoneVoters && sehriStatus.zoneVoters.length === 0 && (
+            <View style={hs.closedNotice}>
+              <Text style={hs.closedText}>No one from your zone needs Sehri today.</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {phase === 'closed' && (
+        <View style={hs.specialCaseSection}>
+          <View style={hs.specialCaseHeader}>
+            <Ionicons name="lock-closed-outline" size={15} color={COLORS.textMuted} />
+            <Text style={hs.specialCaseLabel}>Special Case</Text>
+            <Text style={hs.specialCaseText}>Window closed</Text>
+          </View>
+          {isSpecialCase && (
+            <View style={hs.specialCaseBadge}>
+              <Text style={hs.specialCaseText}>
+                {specialCaseType === 'want' ? '✅ You requested Sehri — admin will confirm at 5 PM' : '❌ Opted out — no Sehri'}
+              </Text>
+            </View>
+          )}
+          <View style={hs.closedNotice}>
+            <Ionicons name="lock-closed-outline" size={13} color={COLORS.textMuted} />
+            <Text style={hs.closedText}>Voting opens at 10:00 PM tonight</Text>
+          </View>
         </View>
       )}
 
@@ -280,6 +383,9 @@ export default function HomeScreen() {
   const [isSpecialCase, setIsSpecialCase] = useState(false);
   const [specialCaseType, setSpecialCaseType] = useState<string | null>(null);
   const [specialCaseLoading, setSpecialCaseLoading] = useState(false);
+  const [phase, setPhase] = useState('closed');
+  const [sehriStatus, setSehriStatus] = useState<any>(null);
+  const [sehriStatusLoading, setSehriStatusLoading] = useState(false);
   const [votersModalVisible, setVotersModalVisible] = useState(false);
   const [voters, setVoters] = useState<any[]>([]);
   const [votersLoading, setVotersLoading] = useState(false);
@@ -300,6 +406,16 @@ export default function HomeScreen() {
       setPollWindowOpen(d.isWindowOpen ?? isPollOpen(new Date()));
       setIsSpecialCase(d.isSpecialCase || false);
       setSpecialCaseType(d.specialCaseType || null);
+      const currentPhase = d.phase || (d.isWindowOpen ? 'voting' : 'closed');
+      setPhase(currentPhase);
+      if (currentPhase === 'status') {
+        setSehriStatusLoading(true);
+        try {
+          const statusRes = await api.get(ENDPOINTS.ACTIVE_POLL_STATUS);
+          setSehriStatus(statusRes.data.data);
+        } catch {}
+        setSehriStatusLoading(false);
+      }
     } catch {}
     // Only super admins can see donation summary — skip for regular users
     if (user?.role === 'super_admin') {
@@ -409,8 +525,9 @@ export default function HomeScreen() {
             <TomorrowPollCard
               poll={poll} userResponse={pollResponse} zoneYesCount={zoneYesCount}
               pollLoading={pollLoading} sehriDateLabel={pollDisplayLabel}
-              isWindowOpen={pollWindowOpen} isSpecialCase={isSpecialCase}
+              phase={phase} isSpecialCase={isSpecialCase}
               specialCaseType={specialCaseType} specialCaseLoading={specialCaseLoading}
+              sehriStatus={sehriStatus} sehriStatusLoading={sehriStatusLoading}
               onVote={submitPollResponse} onSpecialCase={submitSpecialCase}
               onUndoSpecialCase={undoSpecialCase} onViewVoters={openVoters}
             />
@@ -608,6 +725,10 @@ const hs = StyleSheet.create({
   zoneCountLabel: { color: COLORS.textSecondary, fontSize: 11 },
   viewVotersBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   viewVotersText: { color: COLORS.primary, fontSize: 13, fontWeight: '600' },
+  voterRowInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  voterAvatarInline: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(201,168,76,0.15)' },
+  voterAvatarTextInline: { color: COLORS.primary, fontSize: 13, fontWeight: '800' },
+  voterNameInline: { color: COLORS.textPrimary, fontSize: 13, fontWeight: '700' },
   donationHomeCard: { borderRadius: 20, padding: 16, marginTop: 16, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(201,168,76,0.25)', ...SHADOWS.md },
   donationHomeLabel: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
   donationHomeAmount: { color: COLORS.primary, fontSize: 32, fontWeight: '800', marginTop: 4 },

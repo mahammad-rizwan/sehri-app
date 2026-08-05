@@ -147,9 +147,15 @@ export default function AdminDashboard() {
                     );
                   })}
                   {(tomorrowStats.specialCaseCount ?? 0) > 0 && (
-                    <TouchableOpacity style={styles.scBtn} onPress={() => setScModalVisible(true)} activeOpacity={0.8}>
+                    <TouchableOpacity
+                      style={styles.scBtn}
+                      onPress={() => isSuperAdmin
+                        ? router.push('/(app)/admin/special-cases' as any)
+                        : setScModalVisible(true)}
+                      activeOpacity={0.8}
+                    >
                       <Ionicons name="alert-circle-outline" size={15} color={COLORS.accentOrange} />
-                      <Text style={styles.scBtnText}>View Special Cases ({tomorrowStats.specialCaseCount})</Text>
+                      <Text style={styles.scBtnText}>{isSuperAdmin ? 'Allot Special Cases' : 'View Special Cases'} ({tomorrowStats.specialCaseCount})</Text>
                       <Ionicons name="chevron-forward" size={14} color={COLORS.accentOrange} />
                     </TouchableOpacity>
                   )}
@@ -234,6 +240,7 @@ export default function AdminDashboard() {
             {isSuperAdmin ? (
               <>
                 <AdminAction icon="👥" title="Users" color={COLORS.accentOrange} badge={pendingUsers.length} onPress={() => router.push('/(app)/admin/users' as any)} />
+                <AdminAction icon="⭐" title="Special Cases" color={COLORS.accentOrange} badge={tomorrowStats?.specialCaseCount || 0} onPress={() => router.push('/(app)/admin/special-cases' as any)} />
                 <AdminAction icon="💬" title="Feedback" color={COLORS.accent} onPress={() => router.push('/(app)/admin/feedback' as any)} />
                 <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
                 <AdminAction icon="🛵" title="Riders" color={COLORS.accentGreen} onPress={() => router.push('/(app)/admin/tracking' as any)} />

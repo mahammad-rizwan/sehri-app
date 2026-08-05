@@ -470,10 +470,34 @@ const migrate = async () => {
         type: DataTypes.DATE,
         allowNull: true,
       });
-      logger.info('✅ Added verified_at column to otps');
+      logger.info('�o. Added verified_at column to otps');
     } catch (err) {
       if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
-        logger.info('ℹ️ verified_at column already exists');
+        logger.info('�,1�,? verified_at column already exists');
+      } else throw err;
+    }
+
+    // 21. Add sehri allotment columns to poll_responses
+    try {
+      await queryInterface.addColumn('poll_responses', 'sehri_allowed', {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+      });
+      logger.info('�o. Added sehri_allowed column to poll_responses');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('�,1�,? sehri_allowed column already exists');
+      } else throw err;
+    }
+    try {
+      await queryInterface.addColumn('poll_responses', 'sehri_allotted_at', {
+        type: DataTypes.DATE,
+        allowNull: true,
+      });
+      logger.info('�o. Added sehri_allotted_at column to poll_responses');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('�,1�,? sehri_allotted_at column already exists');
       } else throw err;
     }
 

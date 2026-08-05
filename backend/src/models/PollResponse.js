@@ -40,6 +40,18 @@ const PollResponse = sequelize.define('PollResponse', {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  // Sehri allotment — set by super admin during 5–6 PM allotment window
+  // true  = Sehri allotted (confirmed)
+  // false = not allotted (no Sehri)
+  // null  = not decided yet (pending)
+  sehri_allowed: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+  },
+  sehri_allotted_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   tableName: 'poll_responses',
   indexes: [
