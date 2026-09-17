@@ -12,7 +12,7 @@ const logger = require('../utils/logger');
  */
 const submitDonation = async (req, res) => {
   try {
-    const { donor_name, message, is_anonymous: isAnonymousRaw = false } = req.body;
+    const { donor_name, message, amount: amountRaw, is_anonymous: isAnonymousRaw = false } = req.body;
     const is_anonymous = isAnonymousRaw === 'true' || isAnonymousRaw === true;
 
     if (!req.file) {
@@ -28,6 +28,12 @@ const submitDonation = async (req, res) => {
       return error(res, 'Donor name is required', 400);
     }
 
+    // Parse and validate user-declared amount
+    const declaredAmount = amountRaw ? parseFloat(amountRaw) : null;
+    if (!declaredAmount || isNaN(declaredAmount) || declaredAmount <= 0) {
+      return error(res, 'Please enter the amount you paid', 400);
+    }
+
     // Always store REAL information regardless of is_anonymous flag
     const actualName = is_anonymous ? req.user.name : (donor_name?.trim() || req.user.name);
     const actualPhone = req.user.phone;
@@ -41,17 +47,18 @@ const submitDonation = async (req, res) => {
     const proofPath = `/uploads/donations/${req.file.filename}`;
 
     const donation = await Donation.create({
-      user_id: actualUserId,           // Always store real user ID
+      user_id: actualUserId,
       status: 'pending',
-      donor_name: actualName,          // Always store real name
-      donor_phone: actualPhone,        // Always store real phone
-      donor_zone: actualZone,          // Always store real zone
+      donor_name: actualName,
+      donor_phone: actualPhone,
+      donor_zone: actualZone,
+      amount: declaredAmount,          // Store user-declared amount (pending verification)
       message: message?.trim() || null,
-      is_anonymous,                    // UI display flag only
+      is_anonymous,
       proof_url: proofPath,
     });
 
-    logger.info(`Donation submitted: ${donation.id} by ${actualName} (anonymous: ${is_anonymous})`);
+    logger.info(`Donation submitted: ${donation.id} by ${actualName} ₹${declaredAmount} (anonymous: ${is_anonymous})`);
 
     return success(res, { 
       donationId: donation.id,
