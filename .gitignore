@@ -16,6 +16,8 @@ Thumbs.db
 CREDENTIALS.txt
 service-account.json
 uploads/
+*.sql
+ngrok.exe
 
 .idea/
 google-services.json
