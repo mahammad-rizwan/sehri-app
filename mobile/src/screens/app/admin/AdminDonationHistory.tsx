@@ -60,6 +60,10 @@ export default function AdminDonationHistory() {
     try {
       const res = await api.get(ENDPOINTS.DONATION_ALL);
       const d = res.data.data;
+      // Debug: log first donation to see raw shape
+      if (d.donations?.length > 0) {
+        console.log('[Donations] first item:', JSON.stringify(d.donations[0]));
+      }
       setData(d);
       setDonations(d.donations || []);
     } catch (err: any) {
