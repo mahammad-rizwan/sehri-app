@@ -219,7 +219,7 @@ const getDonationSummary = async (req, res) => {
       is_anonymous: d.is_anonymous,
       message: d.message,
       proof_url: d.proof_url,
-      created_at: d.created_at,
+      created_at: d.created_at ? new Date(d.created_at).toISOString() : null,
       user_id: d.user_id,
     }));
 
