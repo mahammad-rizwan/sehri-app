@@ -114,7 +114,7 @@ export default function ChatScreen() {
   const { id: groupId } = useLocalSearchParams<{ id: string }>();
   const { user, activeRole } = useAuthStore();
   const router = useRouter();
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isSuperAdmin = activeRole === 'super_admin';
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
@@ -227,7 +227,7 @@ export default function ChatScreen() {
 
   // ─── Long press → delete ───
   const handleLongPress = (msg: Message) => {
-    const canDelete = isSuperAdmin || (msg.sender_id === user?.id && msg.sender_type === user?.role);
+    const canDelete = isSuperAdmin || (msg.sender_id === user?.id && msg.sender_type === activeRole);
     if (!canDelete) return;
     const isOwn = msg.sender_id === user?.id;
     Alert.alert(

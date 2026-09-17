@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES, ZONE_CONFIG } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import GoldButton from '../../components/ui/GoldButton';
@@ -16,6 +17,7 @@ import { ENDPOINTS } from '../../constants/api';
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [zoneAdmin, setZoneAdmin] = useState<{ name: string; phone: string } | null>(null);
 
   useEffect(() => {
@@ -42,6 +44,14 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={styles.container}>
+      <View style={[styles.topBar, { paddingTop: insets.top, height: insets.top + (Platform.OS === 'ios' ? 44 : 56) }]}>
+        <View style={styles.topBarContent}>
+          <TouchableOpacity onPress={() => router.push('/(app)/home' as any)} style={styles.backBtn} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
+            <Text style={styles.backBtnText}>Home</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.topSpacer} />
 
@@ -148,8 +158,21 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  topBar: {
+    justifyContent: 'flex-end',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  topBarContent: {
+    flexDirection: 'row', alignItems: 'center',
+    height: Platform.OS === 'ios' ? 44 : 56,
+    paddingHorizontal: 4,
+  },
+  backBtn:     { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  backBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '500' },
   scroll: { paddingHorizontal: SIZES.spacing.xl, paddingTop: 4, paddingBottom: 60 },
-  topSpacer: { height: 60 },
+  topSpacer: { height: 16 },
   profileHeader: { alignItems: 'center', marginBottom: SIZES.spacing.xl, marginTop: SIZES.spacing.md },
   initialCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: SIZES.spacing.md, backgroundColor: COLORS.primary, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
   initialText: { color: COLORS.textOnPrimary, fontSize: SIZES.xxxl, fontWeight: '800' },

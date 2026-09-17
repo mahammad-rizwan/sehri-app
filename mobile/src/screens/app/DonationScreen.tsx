@@ -10,6 +10,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
+import * as FileSystem from 'expo-file-system';
+import { Asset } from 'expo-asset';
 import { COLORS, SIZES } from '../../constants/theme';
 import GoldButton from '../../components/ui/GoldButton';
 import PremiumCard from '../../components/ui/PremiumCard';
@@ -27,6 +29,7 @@ export default function DonationScreen() {
   const { user } = useAuthStore();
   const [donorName, setDonorName] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
   const [proofUri, setProofUri] = useState<string | null>(null);
   const [proofName, setProofName] = useState<string | null>(null);
@@ -44,11 +47,48 @@ export default function DonationScreen() {
         Alert.alert('Permission needed', 'Allow photo access to save the QR code.');
         return;
       }
-      const asset = await MediaLibrary.createAssetAsync(Image.resolveAssetSource(QR_IMAGE).uri);
-      await MediaLibrary.createAlbumAsync('Sehri Connect', asset, false);
-      Toast.show({ type: 'success', text1: 'QR code saved to your gallery' });
-    } catch {
-      Toast.show({ type: 'error', text1: 'Could not save QR code' });
+
+      // Load the bundled asset
+      const [asset] = await Asset.loadAsync(QR_IMAGE);
+      const sourceUri = asset.localUri ?? asset.uri;
+
+      console.log('[QR] asset.localUri:', asset.localUri);
+      console.log('[QR] asset.uri:', asset.uri);
+      console.log('[QR] using sourceUri:', sourceUri);
+
+      if (!sourceUri) {
+        Toast.show({ type: 'error', text1: 'Could not locate QR image' });
+        return;
+      }
+
+      const destUri = `${FileSystem.cacheDirectory}donation-qr-${Date.now()}.jpeg`;
+
+      // If it's already a local file just copy; otherwise download it
+      if (sourceUri.startsWith('file://') || sourceUri.startsWith('/')) {
+        await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+      } else {
+        const result = await FileSystem.downloadAsync(sourceUri, destUri);
+        console.log('[QR] downloadAsync status:', result.status, 'uri:', result.uri);
+        if (result.status !== 200) {
+          Toast.show({ type: 'error', text1: 'Failed to fetch QR image' });
+          return;
+        }
+      }
+
+      // Verify file actually exists before saving to gallery
+      const info = await FileSystem.getInfoAsync(destUri);
+      console.log('[QR] file info:', JSON.stringify(info));
+      if (!info.exists) {
+        Toast.show({ type: 'error', text1: 'QR file not found after download' });
+        return;
+      }
+
+      const mediaAsset = await MediaLibrary.createAssetAsync(destUri);
+      await MediaLibrary.createAlbumAsync('Sehri Connect', mediaAsset, false);
+      Toast.show({ type: 'success', text1: 'QR code saved to your gallery ✅' });
+    } catch (err: any) {
+      console.log('[QR] error:', err?.message, err?.code);
+      Toast.show({ type: 'error', text1: 'Could not save QR code', text2: err?.message });
     }
   };
 
@@ -98,6 +138,10 @@ export default function DonationScreen() {
       Toast.show({ type: 'error', text1: 'Please enter your name or choose anonymous' });
       return;
     }
+    if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0) {
+      Toast.show({ type: 'error', text1: 'Please enter a valid donation amount' });
+      return;
+    }
     if (!proofUri) {
       Toast.show({ type: 'error', text1: 'Please upload the payment proof' });
       return;
@@ -114,14 +158,25 @@ export default function DonationScreen() {
       } as any);
       formData.append('is_anonymous', String(isAnonymous));
       formData.append('donor_name', isAnonymous ? '' : donorName.trim());
+      formData.append('amount', amount.trim());
       formData.append('message', message.trim());
 
       await api.postForm(ENDPOINTS.SUBMIT_DONATION, formData);
 
       Toast.show({ type: 'success', text1: 'JazakAllahu Khayran! 🎁', text2: 'Your donation has been submitted.' });
-      setDonorName(''); setMessage(''); setIsAnonymous(false); setProofUri(null); setProofName(null);
+      setDonorName(''); setAmount(''); setMessage(''); setIsAnonymous(false); setProofUri(null); setProofName(null);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to submit donation' });
+      const isTimeout = err?.code === 'ECONNABORTED' || err?.message?.includes('timeout');
+      if (isTimeout) {
+        // Server likely received and processed it — warn user rather than showing hard error
+        Toast.show({
+          type: 'info',
+          text1: 'Upload taking long…',
+          text2: 'Your donation may have been submitted. Check donation history.',
+        });
+      } else {
+        Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to submit donation' });
+      }
     } finally {
       setLoading(false);
     }
@@ -193,6 +248,16 @@ export default function DonationScreen() {
               onChangeText={setMessage}
               multiline
               numberOfLines={2}
+            />
+
+            <Text style={styles.label}>Amount Paid (₹) <Text style={styles.required}>*</Text></Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter amount you paid e.g. 500"
+              placeholderTextColor={COLORS.textMuted}
+              value={amount}
+              onChangeText={(t) => setAmount(t.replace(/[^0-9.]/g, ''))}
+              keyboardType="decimal-pad"
             />
           </PremiumCard>
 
@@ -321,4 +386,5 @@ const styles = StyleSheet.create({
   removeProofText: { color: COLORS.accentRed, fontSize: SIZES.xs, fontWeight: '600' },
   donateBtn: { width: '100%', marginTop: SIZES.spacing.sm },
   secureNote: { color: COLORS.textMuted, fontSize: SIZES.xs, textAlign: 'center', marginTop: SIZES.spacing.md },
+  required: { color: COLORS.accentRed },
 });

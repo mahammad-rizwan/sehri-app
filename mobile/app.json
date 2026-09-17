@@ -90,7 +90,8 @@
           "photosPermission": "Allow Sehri Connect to save the donation QR code to your device.",
           "savePhotosPermission": "Allow Sehri Connect to save the donation QR code to your device."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true

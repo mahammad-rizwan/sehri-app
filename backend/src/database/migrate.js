@@ -497,8 +497,62 @@ const migrate = async () => {
       logger.info('�o. Added sehri_allotted_at column to poll_responses');
     } catch (err) {
       if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
-        logger.info('�,1�,? sehri_allotted_at column already exists');
+        logger.info('ℹ️ sehri_allotted_at column already exists');
       } else throw err;
+    }
+
+    // 22. Add missing donations columns: donor_name, donor_phone, donor_zone, is_anonymous
+    try {
+      await queryInterface.addColumn('donations', 'donor_name', {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+      });
+      logger.info('✅ Added donor_name to donations');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ donor_name already exists');
+      } else logger.warn('⚠️ donor_name:', err.message);
+    }
+
+    try {
+      await queryInterface.addColumn('donations', 'donor_phone', {
+        type: DataTypes.STRING(15),
+        allowNull: true,
+      });
+      logger.info('✅ Added donor_phone to donations');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ donor_phone already exists');
+      } else logger.warn('⚠️ donor_phone:', err.message);
+    }
+
+    try {
+      const [dzExists] = await sequelize.query(
+        "SELECT COUNT(*) AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'donations' AND COLUMN_NAME = 'donor_zone';",
+      );
+      if (parseInt(dzExists[0].c) === 0) {
+        await sequelize.query(
+          "ALTER TABLE `donations` ADD COLUMN `donor_zone` ENUM('masjid','boys_hostel','stanza','girls') NULL;"
+        );
+        logger.info('✅ Added donor_zone to donations');
+      } else {
+        logger.info('ℹ️ donor_zone already exists');
+      }
+    } catch (err) {
+      logger.warn('⚠️ donor_zone:', err.message);
+    }
+
+    try {
+      await queryInterface.addColumn('donations', 'is_anonymous', {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+      });
+      logger.info('✅ Added is_anonymous to donations');
+    } catch (err) {
+      if (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME') {
+        logger.info('ℹ️ is_anonymous already exists');
+      } else logger.warn('⚠️ is_anonymous:', err.message);
     }
 
     logger.info('✅ Migration completed successfully');

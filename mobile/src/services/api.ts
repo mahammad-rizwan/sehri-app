@@ -78,9 +78,10 @@ class ApiService {
   post = (url: string, data?: any) =>
     this.instance.post(url, data);
 
-  postForm = (url: string, formData: FormData) =>
+  postForm = (url: string, formData: FormData, timeoutMs = 60000) =>
     this.instance.post(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: timeoutMs,
     });
 
   patch = (url: string, data?: any) =>

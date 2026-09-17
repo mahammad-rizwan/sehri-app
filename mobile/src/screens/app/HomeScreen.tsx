@@ -383,7 +383,7 @@ function TomorrowPollCard({
 }
 
 export default function HomeScreen() {
-  const { user } = useAuthStore();
+  const { user, activeRole } = useAuthStore();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [poll, setPoll] = useState<any>(null);
@@ -432,14 +432,14 @@ export default function HomeScreen() {
       }
     } catch {}
     // Only super admins can see donation summary — skip for regular users
-    if (user?.role === 'super_admin') {
+    if (activeRole === 'super_admin') {
       try {
         const donRes = await api.get(ENDPOINTS.DONATION_SUMMARY);
         setDonationTotal(donRes.data.data.total_amount || 0);
         setDonationCount(donRes.data.data.total_donations || 0);
       } catch {}
     }
-  }, [user?.role]);
+  }, [activeRole]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -558,7 +558,7 @@ export default function HomeScreen() {
               <Text style={hs.donationHomeLabel}>💰 Total Donations Collected</Text>
               <Text style={hs.donationHomeAmount}>₹{Number(donationTotal).toLocaleString()}</Text>
               {donationCount > 0 && <Text style={hs.donationHomeSub}>{donationCount} donations</Text>}
-              {user?.role === 'super_admin' && (
+              {activeRole === 'super_admin' && (
                 <TouchableOpacity
                   style={hs.viewDonationsBtn}
                   onPress={() => router.push('/(app)/admin/donation-history' as any)}

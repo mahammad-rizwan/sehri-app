@@ -18,8 +18,8 @@ const ZONE_KEYS = ['masjid', 'boys_hostel', 'stanza', 'girls'] as const;
 
 export default function AdminPollHistory() {
   const router = useRouter();
-  const { user } = useAuthStore();
-  const isSuperAdmin = user?.role === 'super_admin';
+  const { user, activeRole } = useAuthStore();
+  const isSuperAdmin = activeRole === 'super_admin';
   const [loading, setLoading] = useState(true);
   const [pollDates, setPollDates] = useState<string[]>([]);
   const [viewDate, setViewDate] = useState(new Date());

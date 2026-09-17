@@ -23,7 +23,7 @@ interface AdminUser {
 }
 
 export default function ManageAdmins() {
-  const { user } = useAuthStore();
+  const { user, activeRole } = useAuthStore();
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState<'admin' | 'super_admin' | null>(null);
@@ -95,7 +95,7 @@ export default function ManageAdmins() {
     );
   };
 
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isSuperAdmin = activeRole === 'super_admin';
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={styles.container}>

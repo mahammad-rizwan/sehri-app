@@ -28,8 +28,8 @@ const ZONE_OPTIONS = [
 ];
 
 export default function UserManagement() {
-  const { user: currentUser } = useAuthStore();
-  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const { user: currentUser, activeRole } = useAuthStore();
+  const isSuperAdmin = activeRole === 'super_admin';
 
   const [users, setUsers]               = useState<any[]>([]);
   const [loading, setLoading]           = useState(true);

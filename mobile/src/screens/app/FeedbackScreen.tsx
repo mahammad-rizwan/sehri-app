@@ -4,6 +4,9 @@ import {
   ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 import GoldButton from '../../components/ui/GoldButton';
 import PremiumCard from '../../components/ui/PremiumCard';
@@ -25,6 +28,8 @@ export default function FeedbackScreen() {
   const [rating, setRating] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const handleSubmit = async () => {
     if (message.trim().length < 5) {
@@ -67,6 +72,14 @@ export default function FeedbackScreen() {
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={styles.container}>
+      <View style={[styles.topBar, { paddingTop: insets.top, height: insets.top + (Platform.OS === 'ios' ? 44 : 56) }]}>
+        <View style={styles.topBarContent}>
+          <TouchableOpacity onPress={() => router.push('/(app)/home' as any)} style={styles.backBtn} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
+            <Text style={styles.backBtnText}>Home</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
@@ -146,6 +159,19 @@ export default function FeedbackScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  topBar: {
+    justifyContent: 'flex-end',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  topBarContent: {
+    flexDirection: 'row', alignItems: 'center',
+    height: Platform.OS === 'ios' ? 44 : 56,
+    paddingHorizontal: 4,
+  },
+  backBtn:     { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  backBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '500' },
   scroll: { padding: SIZES.spacing.xl, paddingTop: 16, paddingBottom: 40 },
   header: { alignItems: 'center', marginBottom: SIZES.spacing.xl },
   headerEmoji: { fontSize: 48, marginBottom: SIZES.spacing.sm },

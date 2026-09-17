@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity, Platform,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
@@ -17,6 +19,7 @@ const DEFAULT_LNG = 77.4822;
 
 export default function TrackingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [riders, setRiders]          = useState<any[]>([]);
   const [loading, setLoading]        = useState(true);
@@ -86,6 +89,19 @@ export default function TrackingScreen() {
 
   return (
     <View style={st.root}>
+      {/* ── Top bar with Home back button ── */}
+      <View style={[st.topBar, { paddingTop: insets.top, height: insets.top + (Platform.OS === 'ios' ? 44 : 56) }]}>
+        <View style={st.topBarContent}>
+          <TouchableOpacity onPress={() => router.push('/(app)/home' as any)} style={st.backBtn} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
+            <Text style={st.backBtnText}>Home</Text>
+          </TouchableOpacity>
+          {/* Hidden 5-tap title for rider login */}
+          <TouchableOpacity onPress={handleHeaderTap} activeOpacity={1} style={st.titleTap}>
+            <Text style={st.headerTitle}>🛵 Live Tracking</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* ══  MAP  ══ */}
       <View style={st.mapArea}>
@@ -117,17 +133,6 @@ export default function TrackingScreen() {
         )}
       </View>
 
-      {/* ══  HEADER — only title, hidden 5-tap for rider login  ══ */}
-      <LinearGradient
-        colors={['rgba(5,13,22,0.93)', 'rgba(5,13,22,0.52)', 'transparent']}
-        style={st.header}
-        pointerEvents="box-none"
-      >
-        <TouchableOpacity onPress={handleHeaderTap} activeOpacity={0.85}>
-          <Text style={st.headerTitle}>🛵 Live Tracking</Text>
-        </TouchableOpacity>
-      </LinearGradient>
-
       {/* ══  BOTTOM — minimal status  ══ */}
       <View style={st.sheet}>
         <Text style={st.statusTxt}>
@@ -143,6 +148,24 @@ export default function TrackingScreen() {
 
 const st = StyleSheet.create({
   root:    { flex: 1, backgroundColor: '#050D16' },
+
+  topBar: {
+    justifyContent: 'flex-end',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    zIndex: 10,
+  },
+  topBarContent: {
+    flexDirection: 'row', alignItems: 'center',
+    height: Platform.OS === 'ios' ? 44 : 56,
+    paddingHorizontal: 4,
+  },
+  backBtn:     { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  backBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '500' },
+  titleTap:    { flex: 1, alignItems: 'center' },
+  headerTitle: { color: COLORS.textPrimary, fontSize: SIZES.md, fontWeight: '700' },
+
   mapArea: { flex: 1 },
   webview: { flex: 1, backgroundColor: '#0d1b2a' },
 
@@ -162,13 +185,6 @@ const st = StyleSheet.create({
   mapErrorTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: 4 },
   mapErrorSub: { color: '#8899AA', fontSize: 13, textAlign: 'center', lineHeight: 20 },
 
-  header: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    paddingTop: 12, paddingBottom: 40,
-    paddingHorizontal: SIZES.spacing.xl,
-  },
-  headerTitle: { color: '#fff', fontSize: SIZES.xl, fontWeight: '800' },
-
   sheet: {
     backgroundColor: COLORS.backgroundCard,
     borderTopLeftRadius: 22, borderTopRightRadius: 22,
@@ -177,6 +193,5 @@ const st = StyleSheet.create({
     paddingTop: SIZES.spacing.md,
     paddingBottom: SIZES.spacing.xl,
   },
-
-  statusTxt: { color:COLORS.textPrimary, fontSize:SIZES.sm, fontWeight:'600', textAlign:'center' },
+  statusTxt: { color: COLORS.textPrimary, fontSize: SIZES.sm, fontWeight: '600', textAlign: 'center' },
 });

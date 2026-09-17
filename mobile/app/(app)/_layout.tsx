@@ -40,7 +40,7 @@ const SUPER_ADMIN_VISIBLE = new Set(SUPER_ADMIN_TAB_ORDER);
 const ROOT_SCREENS = new Set(['home', 'admin/dashboard']);
 
 // Screens whose layout header should NOT show a back button
-const NO_BACK = new Set(['home', 'admin/dashboard', 'dua/index', 'dua/category/[id]', 'dua/bookmarks', 'quran/surah/index']);
+const NO_BACK = new Set(['home', 'admin/dashboard', 'dua/index', 'dua/category/[id]', 'dua/bookmarks', 'quran/surah/index', 'donation', 'tracking', 'profile', 'feedback', 'poll-history']);
 
 // ─── Tab icon ─────────────────────────────────────────────────────────────────
 function TabIcon({ icon, iconActive, focused }: { icon: string; iconActive: string; focused: boolean }) {
@@ -89,6 +89,13 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
+  // routeMap must be declared before any conditional return (Rules of Hooks)
+  const routeMap = useMemo(() => {
+    const map: Record<string, typeof state.routes[0]> = {};
+    state.routes.forEach((r) => { map[r.name] = r; });
+    return map;
+  }, [state.routes]);
+
   // Hide bar entirely when keyboard is up on Android
   if (keyboardVisible && Platform.OS === 'android') return null;
 
@@ -97,12 +104,6 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     : activeRole === 'super_admin'
       ? SUPER_ADMIN_TAB_ORDER
       : ADMIN_TAB_ORDER;
-
-  const routeMap = useMemo(() => {
-    const map: Record<string, typeof state.routes[0]> = {};
-    state.routes.forEach((r) => { map[r.name] = r; });
-    return map;
-  }, [state.routes]);
 
   function isTabActive(name: string) {
     if (state.routes[state.index]?.name === name) return true;

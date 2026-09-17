@@ -30,7 +30,7 @@ export default function AdminDashboard() {
   const [scModalVisible, setScModalVisible] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
 
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isSuperAdmin = activeRole === 'super_admin';
 
   const loadData = async () => {
     try {

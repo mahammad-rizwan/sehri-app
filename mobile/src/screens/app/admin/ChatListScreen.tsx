@@ -30,7 +30,7 @@ export default function ChatListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const isSuperAdmin = user?.role === 'super_admin';
+  const isSuperAdmin = activeRole === 'super_admin';
 
   const loadGroups = useCallback(async () => {
     try {

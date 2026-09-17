@@ -5,15 +5,19 @@ import { Platform } from 'react-native';
 import api from './api';
 import { ENDPOINTS } from '../constants/api';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Only configure notification handler on real devices.
+// expo-notifications push support was removed from Expo Go in SDK 53.
+if (Device.isDevice) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 export async function registerForPushNotifications() {
   try {
@@ -106,6 +110,7 @@ export async function schedulePollReminders() {
 }
 
 export function addNotificationReceivedListener(handler: (notification: Notifications.Notification) => void) {
+  if (!Device.isDevice) return { remove: () => {} };
   const sub = Notifications.addNotificationReceivedListener((notification) => {
     handler(notification);
   });
@@ -113,6 +118,7 @@ export function addNotificationReceivedListener(handler: (notification: Notifica
 }
 
 export function addNotificationResponseListener(handler: (screen?: string, data?: any) => void) {
+  if (!Device.isDevice) return { remove: () => {} };
   const sub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data;
     if (data?.screen === 'chat' && data?.groupId) {
