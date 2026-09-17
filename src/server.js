@@ -35,14 +35,8 @@ app.use(helmet());
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-
-// Skip ngrok browser warning for all requests
-app.use((req, res, next) => {
-  res.setHeader('ngrok-skip-browser-warning', 'true');
-  next();
-});
 
 // ─────────────── General Middleware ───────────────
 app.use(compression());
@@ -134,9 +128,9 @@ const startServer = async () => {
   server.listen(PORT, '0.0.0.0', () => {
     logger.info(`🚀 Sehri Connect API running on port ${PORT}`);
     logger.info(`📡 Environment: ${process.env.NODE_ENV}`);
-    logger.info(`🌐 Local Network: http://10.71.183.133:${PORT}/api`);
-    logger.info(`💻 Localhost: http://localhost:${PORT}/api`);
-    logger.info(`📱 Ngrok: Run 'ngrok http ${PORT}' for public access`);
+    if (process.env.NODE_ENV === 'development') {
+      logger.info(`💻 Localhost: http://localhost:${PORT}/api`);
+    }
   });
 };
 
