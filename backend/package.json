@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Sehri Connect - Ramzan Food Distribution Backend API",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=18.x"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",

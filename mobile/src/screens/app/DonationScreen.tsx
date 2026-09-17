@@ -63,11 +63,25 @@ export default function DonationScreen() {
         mediaTypes: ['images'],
         allowsEditing: false,
         quality: 0.8,
+        allowsMultipleSelection: false,
       });
       if (!result.canceled && result.assets.length > 0) {
         const asset = result.assets[0];
+        const fileName = asset.fileName || 'payment-proof.jpg';
+        const ext = fileName.split('.').pop()?.toLowerCase();
+        
+        // Strictly allow only PNG, JPEG, JPG
+        if (!ext || !['png', 'jpeg', 'jpg'].includes(ext)) {
+          Toast.show({ 
+            type: 'error', 
+            text1: 'Invalid file type', 
+            text2: 'Only PNG, JPEG, and JPG images are allowed' 
+          });
+          return;
+        }
+        
         setProofUri(asset.uri);
-        setProofName(asset.fileName || 'payment-proof.jpg');
+        setProofName(fileName);
       }
     } catch {
       Toast.show({ type: 'error', text1: 'Could not pick image' });
@@ -166,7 +180,7 @@ export default function DonationScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.anonymousTitle}>Donate anonymously</Text>
-                <Text style={styles.anonymousDesc}>Hide your name from donation records.</Text>
+                <Text style={styles.anonymousDesc}>Your name will be hidden from public records, but admin keeps your info for verification.</Text>
               </View>
             </TouchableOpacity>
 
@@ -214,7 +228,7 @@ export default function DonationScreen() {
           <PremiumCard style={styles.card}>
             <Text style={styles.cardTitle}>Upload Payment Proof</Text>
             <Text style={styles.helperText}>
-              After making the payment, upload a screenshot or photo of the payment confirmation.
+              After making the payment, upload a screenshot or photo of the payment confirmation. Only PNG, JPEG, and JPG formats are allowed.
             </Text>
 
             {proofUri ? (
@@ -230,7 +244,7 @@ export default function DonationScreen() {
               <TouchableOpacity style={styles.uploadBox} onPress={pickProof} activeOpacity={0.8}>
                 <Ionicons name="cloud-upload-outline" size={36} color={COLORS.primary} />
                 <Text style={styles.uploadTitle}>Upload proof</Text>
-                <Text style={styles.uploadSubtitle}>Screenshots and all image types supported</Text>
+                <Text style={styles.uploadSubtitle}>PNG, JPEG, JPG only (no PDF)</Text>
               </TouchableOpacity>
             )}
           </PremiumCard>

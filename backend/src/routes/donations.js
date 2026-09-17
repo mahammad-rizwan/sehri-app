@@ -10,13 +10,16 @@ const {
   updateDonationStatus,
   getDonationHistory,
   getDonationSummary,
+  getDonationProof,
 } = require('../controllers/donationController');
 
+// Configure upload directory
 const uploadDir = path.join(__dirname, '../../uploads/donations');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Configure multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -25,6 +28,7 @@ const storage = multer.diskStorage({
   },
 });
 
+// Create upload middleware
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
@@ -36,10 +40,12 @@ const upload = multer({
   },
 });
 
+// Define routes (now upload is defined)
 router.post('/submit', authenticate, upload.single('proof'), submitDonation);
 router.patch('/:id/status', authenticate, authorize('super_admin'), updateDonationStatus);
 router.get('/history', authenticate, getDonationHistory);
 router.get('/summary', authenticate, authorize('super_admin'), getDonationSummary);
+router.get('/:id/proof', authenticate, authorize('admin', 'super_admin'), getDonationProof);
 
 // Multer error handler (file too large / wrong type)
 router.use((err, req, res, next) => {

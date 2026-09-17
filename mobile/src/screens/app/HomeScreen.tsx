@@ -164,13 +164,13 @@ function PrayerHeroCard() {
 function TomorrowPollCard({
   poll, userResponse, zoneYesCount, pollLoading,
   sehriDateLabel, phase, isSpecialCase, specialCaseType,
-  specialCaseLoading, sehriStatus, sehriStatusLoading,
+  specialCaseLoading, sehriStatus, sehriStatusLoading, sehriAllowed,
   onVote, onSpecialCase, onUndoSpecialCase, onViewVoters,
 }: {
   poll: any; userResponse: string | null; zoneYesCount: number; pollLoading: boolean;
   sehriDateLabel: string; phase: string; isSpecialCase: boolean;
   specialCaseType: string | null; specialCaseLoading: boolean;
-  sehriStatus: any; sehriStatusLoading: boolean;
+  sehriStatus: any; sehriStatusLoading: boolean; sehriAllowed: boolean | null;
   onVote: (r: 'yes' | 'no') => void; onSpecialCase: (t: 'want' | 'dont_want') => void;
   onUndoSpecialCase: () => void; onViewVoters: () => void;
 }) {
@@ -242,15 +242,29 @@ function TomorrowPollCard({
             <Text style={hs.specialCaseLabel}>Special Case</Text>
             <Text style={hs.specialCaseText}>Window open: 10:00 AM — 5:00 PM</Text>
           </View>
-          {isSpecialCase && (
+          {isSpecialCase && specialCaseType === 'dont_want' && (
             <View style={hs.specialCaseBadge}>
               <Text style={hs.specialCaseText}>
-                {specialCaseType === 'want' ? '✅ You requested Sehri — admin will confirm at 5 PM' : '❌ Opted out — no Sehri'}
+                ❌ You opted out — no Sehri for today
+              </Text>
+            </View>
+          )}
+          {isSpecialCase && specialCaseType === 'want' && (
+            <View style={hs.specialCaseBadge}>
+              <Text style={hs.specialCaseText}>
+                ✅ You requested Sehri — admin will confirm by 6:00 PM
               </Text>
             </View>
           )}
           {showUndoSpecialCase && (
             <GoldButton title="↩️ Undo Special Case" onPress={onUndoSpecialCase} loading={specialCaseLoading} variant="outline" size="sm" style={{ marginTop: 4 }} />
+          )}
+          {!isSpecialCase && userResponse === 'yes' && (
+            <View style={hs.specialCaseInfo}>
+              <Text style={hs.specialCaseInfoText}>
+                💡 You voted <Text style={{ fontWeight: '800', color: COLORS.accentGreen }}>YES</Text> during the voting window. Your Sehri is confirmed unless you submit a special case.
+              </Text>
+            </View>
           )}
           {showSpecialWant && (
             <GoldButton title="✅ I need Sehri (Special)" onPress={() => onSpecialCase('want')} loading={specialCaseLoading} size="sm" style={{ marginTop: 8 }} />
@@ -258,9 +272,9 @@ function TomorrowPollCard({
           {showSpecialDontWant && (
             <GoldButton title="❌ Don't want (Special)" onPress={() => onSpecialCase('dont_want')} loading={specialCaseLoading} variant="outline" size="sm" style={{ marginTop: 8 }} />
           )}
-          {!showSpecialWant && !showSpecialDontWant && !isSpecialCase && (
+          {!showSpecialWant && !showSpecialDontWant && !isSpecialCase && userResponse !== 'yes' && (
             <View style={hs.closedNotice}>
-              <Ionicons name="lock-closed-outline" size={13} color={COLORS.textMuted} />
+              <Ionicons name="information-circle-outline" size={13} color={COLORS.textMuted} />
               <Text style={hs.closedText}>No special case options available</Text>
             </View>
           )}
@@ -528,6 +542,7 @@ export default function HomeScreen() {
               phase={phase} isSpecialCase={isSpecialCase}
               specialCaseType={specialCaseType} specialCaseLoading={specialCaseLoading}
               sehriStatus={sehriStatus} sehriStatusLoading={sehriStatusLoading}
+              sehriAllowed={pollResponse ? (isSpecialCase ? (sehriStatus?.sehriAllowed ?? null) : null) : null}
               onVote={submitPollResponse} onSpecialCase={submitSpecialCase}
               onUndoSpecialCase={undoSpecialCase} onViewVoters={openVoters}
             />
@@ -607,7 +622,11 @@ export default function HomeScreen() {
                             <Text style={styles.voterAvatarText}>{item.name?.charAt(0)?.toUpperCase() || '?'}</Text>
                           </LinearGradient>
                           <Text style={styles.voterName}>{item.name}</Text>
-                          <View style={styles.voterBadge}><Text style={styles.voterBadgeText}>✅ Yes</Text></View>
+                          {item.type === 'special' ? (
+                            <View style={styles.voterBadgeSpecial}><Text style={styles.voterBadgeSpecialText}>⭐ Special</Text></View>
+                          ) : (
+                            <View style={styles.voterBadge}><Text style={styles.voterBadgeText}>✅ Yes</Text></View>
+                          )}
                         </View>
                       ))}
                     </View>
@@ -676,6 +695,8 @@ const styles = StyleSheet.create({
   voterName: { flex: 1, color: COLORS.textPrimary, fontSize: 14, fontWeight: '600' },
   voterBadge: { backgroundColor: 'rgba(76,175,80,0.15)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(76,175,80,0.4)' },
   voterBadgeText: { color: COLORS.accentGreen, fontSize: 11, fontWeight: '700' },
+  voterBadgeSpecial: { backgroundColor: 'rgba(201,168,76,0.15)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: 'rgba(201,168,76,0.4)' },
+  voterBadgeSpecialText: { color: COLORS.primary, fontSize: 11, fontWeight: '700' },
   addrGroup: { marginBottom: 12 },
   addrGroupHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: 'rgba(201,168,76,0.15)' },
   addrGroupLabel: { color: COLORS.primary, fontSize: 12, fontWeight: '700', flex: 1 },
@@ -713,6 +734,8 @@ const hs = StyleSheet.create({
   voteStatusText: { fontSize: 12, fontWeight: '600', flex: 1, lineHeight: 18 },
   specialCaseBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, backgroundColor: 'rgba(255,152,0,0.08)', borderColor: 'rgba(255,152,0,0.35)' },
   specialCaseText: { color: COLORS.accentOrange, fontSize: 12, flex: 1, lineHeight: 18, fontWeight: '600' },
+  specialCaseInfo: { backgroundColor: 'rgba(76,175,80,0.08)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(76,175,80,0.25)', marginBottom: 8 },
+  specialCaseInfoText: { color: COLORS.accentGreen, fontSize: 12, lineHeight: 18, fontWeight: '600' },
   specialCaseSection: { backgroundColor: 'rgba(255,152,0,0.06)', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,152,0,0.2)', gap: 8 },
   specialCaseHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   specialCaseLabel: { color: COLORS.accentOrange, fontSize: 12, fontWeight: '700' },

@@ -97,12 +97,49 @@ function isStatusWindow() {
 }
 
 // Current phase: 'voting' | 'special_case' | 'allotment' | 'status' | 'closed'
-function getPhase() {
+// Accepts an optional poll object to factor in super admin overrides:
+//
+//   Override OPEN  (is_active=true, deadline_time set, but natural window says closed):
+//     → phase = 'voting'  — special case disabled, regular votes accepted
+//
+//   Override CLOSE (is_active=false, deadline_time set, but natural window says open):
+//     → phase = whatever the time-based phases dictate (special_case / allotment / status)
+//       i.e. the poll is treated as if the voting window already ended naturally.
+//
+// If no override (deadline_time is null) → pure time-based result.
+function getPhase(poll) {
+  const h = istHour();
+
+  if (poll && poll.deadline_time) {
+    // Super admin override is active
+    const naturallyOpen = h >= 22 || h < 10;
+    if (poll.is_active && !naturallyOpen) {
+      // Admin force-opened during daytime — treat as voting window
+      return 'voting';
+    }
+    if (!poll.is_active && naturallyOpen) {
+      // Admin force-closed during night voting window — skip to time-based day phases
+      if (h >= 10 && h < 17) return 'special_case';
+      if (h >= 17 && h < 18) return 'allotment';
+      if (h >= 18 && h < 22) return 'status';
+      // Night hours (22–10) but poll is closed by override → special_case opens at 10 AM
+      // For now it's "closed" until 10 AM
+      return 'closed';
+    }
+  }
+
+  // No override or override matches natural state → pure time-based
   if (isPollWindowOpen()) return 'voting';
   if (isSpecialCaseWindow()) return 'special_case';
   if (isAllotmentWindow()) return 'allotment';
   if (isStatusWindow()) return 'status';
   return 'closed';
+}
+
+// Whether special case submission is allowed given the current poll state
+function isSpecialCaseAllowed(poll) {
+  const phase = getPhase(poll);
+  return phase === 'special_case';
 }
 
 // Find or create poll by date — uses findOrCreate to prevent race condition
@@ -166,6 +203,8 @@ const getActivePoll = async (req, res) => {
       where: zone ? { poll_id: poll.id, response: 'yes', zone } : { poll_id: poll.id, response: 'yes' },
     });
 
+    const phase = getPhase(poll);
+
     return success(res, {
       poll,
       date: dateStr,
@@ -173,10 +212,15 @@ const getActivePoll = async (req, res) => {
       // isWindowOpen = poll.is_active (auto-synced with time unless super admin overrode it)
       isWindowOpen: poll.is_active,
       isPollActive: poll.is_active,
-      phase: getPhase(),
+      phase,
+      // specialCaseEnabled = true only when we're in special_case phase
+      specialCaseEnabled: phase === 'special_case',
+      // overrideActive = true when super admin has manually overridden the natural poll state
+      overrideActive: !!poll.deadline_time,
       userResponse: userResponse ? userResponse.response : null,
       isSpecialCase: userResponse ? (userResponse.is_special_case || false) : false,
       specialCaseType: userResponse ? (userResponse.special_case_type || null) : null,
+      sehriAllowed: userResponse ? (userResponse.sehri_allowed ?? null) : null,
       zoneYesCount,
     });
   } catch (err) {
@@ -279,11 +323,13 @@ const getActivePollStats = async (req, res) => {
  */
 const undoSpecialCase = async (req, res) => {
   try {
-    if (!isSpecialCaseWindow()) {
+    const { pollId } = req.params;
+    const poll = await Poll.findByPk(pollId);
+    if (!poll) return error(res, 'Poll not found', 404);
+
+    if (!isSpecialCaseAllowed(poll)) {
       return error(res, 'Special case window is open only from 10:00 AM to 5:00 PM', 403);
     }
-
-    const { pollId } = req.params;
     const pollResponse = await PollResponse.findOne({
       where: { poll_id: pollId, user_id: req.user.id, is_special_case: true },
     });
@@ -307,10 +353,6 @@ const undoSpecialCase = async (req, res) => {
 
 const submitSpecialCase = async (req, res) => {
   try {
-    if (!isSpecialCaseWindow()) {
-      return error(res, 'Special case window is open only from 10:00 AM to 5:00 PM', 403);
-    }
-
     const { pollId } = req.params;
     const { type } = req.body; // 'want' | 'dont_want'
 
@@ -320,6 +362,10 @@ const submitSpecialCase = async (req, res) => {
 
     const poll = await Poll.findByPk(pollId);
     if (!poll) return error(res, 'Poll not found', 404);
+
+    if (!isSpecialCaseAllowed(poll)) {
+      return error(res, 'Special case window is open only from 10:00 AM to 5:00 PM', 403);
+    }
 
     // Find or create the response row for this user
     let pollResponse = await PollResponse.findOne({
@@ -594,9 +640,26 @@ const toggleActivePoll = async (req, res) => {
 
     try {
       if (newState) {
+        // Admin force-opened the poll → notify all users, voting is now open
         await sendPollEnabledNotification(dateStr);
       } else {
-        await sendPollDisabledNotification(dateStr);
+        // Admin force-closed the poll → notify users poll is closed
+        // If we're currently in the natural voting window (22–10), closing it
+        // means special case window is now active (10 AM–5 PM logic takes effect)
+        const h = istHour();
+        const wasNaturallyOpen = h >= 22 || h < 10;
+        if (wasNaturallyOpen) {
+          // Closed during voting window → special case window kicks in from 10 AM
+          await sendPollDisabledNotification(dateStr);
+          // Additional message informing about special case window
+          const { notifyAllUsers } = require('../services/expoPushService');
+          await notifyAllUsers(
+            '🔔 Poll Closed — Special Case Window Open',
+            `Voting has been closed. You can submit a special case from 10:00 AM to 5:00 PM.`
+          );
+        } else {
+          await sendPollDisabledNotification(dateStr);
+        }
       }
     } catch (err) {
       logger.error('sendPollNotification error:', err.message);
@@ -624,10 +687,16 @@ const getSpecialCases = async (req, res) => {
   try {
     const todayStr = getTodayISTDate();
     const poll = await Poll.findOne({ where: { date: todayStr } });
+    const currentPhase = getPhase(poll || null);
+    const h = istHour();
+    // allotmentLocked = true after 6 PM — no more changes allowed
+    const allotmentLocked = h >= 18;
+
     if (!poll) {
       return success(res, {
         poll: null, date: todayStr, displayLabel: displayLabel(todayStr),
-        phase: getPhase(), allotmentOpen: isAllotmentWindow(),
+        phase: currentPhase, allotmentOpen: isAllotmentWindow(),
+        allotmentLocked,
         specialWindow: { from: '10:00', to: '17:00' },
         allotmentWindow: { from: '17:00', to: '18:00' },
         dontWant: [], want: [],
@@ -660,7 +729,8 @@ const getSpecialCases = async (req, res) => {
 
     return success(res, {
       poll, date: todayStr, displayLabel: displayLabel(todayStr),
-      phase: getPhase(), allotmentOpen: isAllotmentWindow(),
+      phase: currentPhase, allotmentOpen: isAllotmentWindow(),
+      allotmentLocked,
       specialWindow: { from: '10:00', to: '17:00' },
       allotmentWindow: { from: '17:00', to: '18:00' },
       dontWant, want,
@@ -677,7 +747,10 @@ const getSpecialCases = async (req, res) => {
  * - want users in the list  → Sehri allotted (confirmed)
  * - want users not in list  → not allotted (no Sehri)
  * - dont_want users         → always no Sehri
- * Sends a push notification to every special-case user afterwards.
+ *
+ * Notifications:
+ *   - Every special-case user (want + dont_want) gets a personal push about their result.
+ *   - All users get a broadcast notification that Sehri status is now available.
  */
 const allotSpecialCases = async (req, res) => {
   try {
@@ -713,30 +786,56 @@ const allotSpecialCases = async (req, res) => {
       else notAllotted += 1;
     }
 
-    // Notify every special-case user: allotted → confirmed, others → no Sehri
-    const users = await User.findAll({
-      where: { id: { [Op.in]: specials.map((s) => s.user_id) } },
+    // Personal notifications for ALL special-case users (want + dont_want)
+    const scUserIds = specials.map((s) => s.user_id);
+    const scUsers = await User.findAll({
+      where: { id: { [Op.in]: scUserIds } },
       attributes: ['id', 'name', 'fcm_token'],
     });
-    const decisionMap = {};
-    specials.forEach((s) => { decisionMap[s.user_id] = s.special_case_type === 'want' && allowedSet.has(s.user_id); });
 
-    const pushPromises = [];
-    for (const u of users) {
-      if (!decisionMap[u.id] || !u.fcm_token) continue;
+    // Build decision map: userId → true (Sehri confirmed) | false (no Sehri)
+    const decisionMap = {};
+    specials.forEach((s) => {
+      if (s.special_case_type === 'want') {
+        decisionMap[s.user_id] = allowedSet.has(s.user_id);
+      } else {
+        // dont_want → no Sehri
+        decisionMap[s.user_id] = false;
+      }
+    });
+
+    const personalPushes = [];
+    for (const u of scUsers) {
+      if (!u.fcm_token) continue;
       const confirmed = decisionMap[u.id];
-      pushPromises.push(sendPushNotification(
+      personalPushes.push(sendPushNotification(
         u.fcm_token,
-        confirmed ? '✅ Sehri Confirmed' : '❌ No Sehri',
+        confirmed ? '✅ Sehri Confirmed!' : '❌ No Sehri Today',
         confirmed
-          ? 'Good news! Your Sehri is confirmed for today.'
-          : 'Sorry, Sehri is not allotted for you today.'
+          ? 'Great news! Your Sehri has been confirmed for today. 🍽️'
+          : 'Sorry, Sehri is not allotted for you today.',
+        { screen: 'poll' }
       ));
     }
-    await Promise.allSettled(pushPromises);
+    await Promise.allSettled(personalPushes);
 
-    logger.info(`Special cases allotted: ${allotted} confirmed, ${notAllotted} rejected (poll ${todayStr})`);
-    return success(res, { allotted, notAllotted, notified: pushPromises.length }, 'Special cases allotted & notifications sent');
+    // Broadcast to ALL users: final Sehri status is now visible
+    try {
+      const { notifyAllUsers } = require('../services/expoPushService');
+      await notifyAllUsers(
+        '🌙 Sehri Status Ready',
+        `Final Sehri list for ${displayLabel(todayStr)} is now available. Check your status in the app.`
+      );
+    } catch (broadcastErr) {
+      logger.error('Broadcast notification error after allotment:', broadcastErr.message);
+    }
+
+    logger.info(`Special cases allotted: ${allotted} confirmed, ${notAllotted} rejected (poll ${todayStr}), ${personalPushes.length} personal notifications sent`);
+    return success(res, {
+      allotted,
+      notAllotted,
+      notified: personalPushes.length,
+    }, 'Special cases allotted & notifications sent');
   } catch (err) {
     logger.error('allotSpecialCases error:', err);
     return error(res, 'Failed to allot special cases', 500);
@@ -747,12 +846,13 @@ const allotSpecialCases = async (req, res) => {
  * GET /polls/active/status  (any authenticated user)
  * Final Sehri status for the current day's poll, plus zone voter breakdown.
  * Available any time; the app shows it during the 6:00 PM – 9:59 PM status window.
+ * Zone voters includes both: regular yes-voters + special-case 'want' users allotted by admin.
  */
 const getMySehriStatus = async (req, res) => {
   try {
-    const phase = getPhase();
     const todayStr = getTodayISTDate();
     const poll = await Poll.findOne({ where: { date: todayStr } });
+    const phase = getPhase(poll || null);
 
     if (!poll) {
       return success(res, {
@@ -791,28 +891,56 @@ const getMySehriStatus = async (req, res) => {
     const zones = ['masjid', 'boys_hostel', 'stanza', 'girls'];
     const zoneCounts = {};
     for (const zone of zones) {
-      zoneCounts[zone] = await PollResponse.count({
+      const regularYes = await PollResponse.count({
         where: { poll_id: poll.id, response: 'yes', is_special_case: false, zone },
       });
+      const allottedSC = await PollResponse.count({
+        where: { poll_id: poll.id, is_special_case: true, special_case_type: 'want', sehri_allowed: true, zone },
+      });
+      zoneCounts[zone] = regularYes + allottedSC;
     }
 
     const zone = req.user.zone;
-    const voters = await PollResponse.findAll({
-      where: zone ? { poll_id: poll.id, response: 'yes', is_special_case: false, zone } : { poll_id: poll.id, response: 'yes', is_special_case: false },
+    // Regular yes-voters in zone
+    const regularVoters = await PollResponse.findAll({
+      where: zone
+        ? { poll_id: poll.id, response: 'yes', is_special_case: false, zone }
+        : { poll_id: poll.id, response: 'yes', is_special_case: false },
       include: [{ model: User, attributes: ['id', 'name', 'address', 'zone'] }],
       order: [[{ model: User, as: 'User' }, 'address', 'ASC']],
     });
+
+    // Special case 'want' users who were allotted Sehri by super admin
+    const allottedSpecialVoters = await PollResponse.findAll({
+      where: zone
+        ? { poll_id: poll.id, is_special_case: true, special_case_type: 'want', sehri_allowed: true, zone }
+        : { poll_id: poll.id, is_special_case: true, special_case_type: 'want', sehri_allowed: true },
+      include: [{ model: User, attributes: ['id', 'name', 'address', 'zone'] }],
+      order: [[{ model: User, as: 'User' }, 'address', 'ASC']],
+    });
+
+    const allVoters = [
+      ...regularVoters.map((v) => ({
+        id: v.User?.id,
+        name: v.User?.name || 'Unknown',
+        address: v.User?.address || '',
+        zone: v.User?.zone || v.zone,
+        type: 'regular',
+      })),
+      ...allottedSpecialVoters.map((v) => ({
+        id: v.User?.id,
+        name: v.User?.name || 'Unknown',
+        address: v.User?.address || '',
+        zone: v.User?.zone || v.zone,
+        type: 'special',
+      })),
+    ].sort((a, b) => (a.address || '').localeCompare(b.address || ''));
 
     return success(res, {
       phase, date: todayStr, displayLabel: displayLabel(todayStr),
       status, reason,
       zoneCounts,
-      zoneVoters: voters.map((v) => ({
-        id: v.User?.id,
-        name: v.User?.name || 'Unknown',
-        address: v.User?.address || '',
-        zone: v.User?.zone || v.zone,
-      })),
+      zoneVoters: allVoters,
       windows: { statusStart: '18:00', statusEnd: '21:59', nextPoll: '22:00' },
     });
   } catch (err) {

@@ -1,0 +1,58 @@
+# ⚙️ RAILWAY ENVIRONMENT VARIABLES
+# Copy this entire file content to Railway Variables (Raw Editor)
+# Replace placeholders with your actual values
+
+# === PRODUCTION SETTINGS ===
+NODE_ENV=production
+PORT=5000
+
+# === DATABASE (Use Railway References) ===
+# ⚠️ IMPORTANT: Don't change these! Railway will replace them automatically
+DB_HOST=${{MySQL.MYSQLHOST}}
+DB_PORT=${{MySQL.MYSQLPORT}}
+DB_NAME=${{MySQL.MYSQLDATABASE}}
+DB_USER=${{MySQL.MYSQLUSER}}
+DB_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+
+# === JWT SECRETS ===
+# Keep your existing values from .env
+JWT_SECRET=your_super_secret_jwt_key_min_32_chars
+JWT_EXPIRES_IN=7d
+JWT_REFRESH_SECRET=your_refresh_secret_key
+JWT_REFRESH_EXPIRES_IN=30d
+
+# === MESSAGECENT (OTP) ===
+# Your current working credentials
+MESSAGECENTRAL_CUSTOMER_ID=C-B7A835D9FAAB450
+MESSAGECENTRAL_PASSWORD=Rizwan@2004
+
+# === GOOGLE MAPS ===
+GOOGLE_MAPS_API_KEY=AIzaSyAWQfQB0HfybB3h-yflpD1Dws6EuhY-8go
+
+# === RAZORPAY ===
+# ⚠️ SWITCH TO LIVE KEYS FOR PRODUCTION!
+# Get live keys from: https://dashboard.razorpay.com/app/keys
+RAZORPAY_KEY_ID=rzp_live_XXXXXXXXXX
+RAZORPAY_KEY_SECRET=your_razorpay_live_secret_here
+
+# === EMAIL (Gmail) ===
+EMAIL_USER=onemessage.support@gmail.com
+EMAIL_PASS=apdn xeya nhpv yzkc
+
+# === SUPER ADMIN ===
+SUPER_ADMIN_PHONE=9483384972
+SUPER_ADMIN_NAME=Rizwan
+SUPER_ADMIN_PASSWORD=Rizwan@2004
+
+# === FIREBASE SERVICE ACCOUNT ===
+# ⚠️ IMPORTANT: Convert service-account.json to single-line string
+# Run this command in backend folder:
+#   cat service-account.json | tr -d '\n'
+# Then paste the output below:
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"sehri-connect","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"..."}
+
+# === NOTES ===
+# 1. DB_* variables use Railway references - they auto-connect to your Railway MySQL
+# 2. Switch Razorpay to LIVE keys before production APK
+# 3. Firebase service account must be on ONE line (no line breaks)
+# 4. After adding these, Railway will restart your service automatically

@@ -35,14 +35,8 @@ app.use(helmet());
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-
-// Skip ngrok browser warning for all requests
-app.use((req, res, next) => {
-  res.setHeader('ngrok-skip-browser-warning', 'true');
-  next();
-});
 
 // ─────────────── General Middleware ───────────────
 app.use(compression());
@@ -131,9 +125,12 @@ const startServer = async () => {
   // Fetch prayer timings on startup (non-blocking)
   fetchAndSavePrayerTimings().catch((err) => logger.warn('Could not fetch prayer timings on startup:', err.message));
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     logger.info(`🚀 Sehri Connect API running on port ${PORT}`);
     logger.info(`📡 Environment: ${process.env.NODE_ENV}`);
+    if (process.env.NODE_ENV === 'development') {
+      logger.info(`💻 Localhost: http://localhost:${PORT}/api`);
+    }
   });
 };
 

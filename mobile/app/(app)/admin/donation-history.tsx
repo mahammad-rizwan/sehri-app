@@ -1,2 +1,3 @@
-import DonationHistoryScreen from '../../../src/screens/app/admin/DonationHistoryScreen';
-export default DonationHistoryScreen;
+import AdminDonationHistory from '../../../src/screens/app/admin/AdminDonationHistory';
+
+export default AdminDonationHistory;

@@ -1,8 +1,6 @@
 // API Configuration
-// For Android emulator use: http://10.0.2.2:5000/api
-// For iOS simulator use:    http://localhost:5000/api
-// For physical device use:  http://10.140.44.133:5000/api
-export const API_BASE_URL = 'http://10.71.183.133:5000/api';
+// ✅ Using Railway Production URL (works 24/7 from anywhere!)
+export const API_BASE_URL = 'https://sehri-app-production.up.railway.app/api';
 
 export const API_TIMEOUT = 15000; // 15 seconds
 
@@ -56,6 +54,9 @@ export const ENDPOINTS = {
   SUBMIT_DONATION: '/donations/submit',
   DONATION_HISTORY: '/donations/history',
   DONATION_SUMMARY: '/donations/summary',
+  DONATION_ALL: '/donations/summary',
+  DONATION_PROOF: (id: string) => `/donations/${id}/proof`,
+  DONATION_UPDATE_STATUS: (id: string) => `/donations/${id}/status`,
 
   // Feedback
   FEEDBACK: '/feedback',

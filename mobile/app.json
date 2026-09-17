@@ -26,6 +26,7 @@
         "backgroundColor": "#0D1B2A"
       },
       "package": "com.sehriconnect.app",
+      "softwareKeyboardLayoutMode": "pan",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAWQfQB0HfybB3h-yflpD1Dws6EuhY-8go"
@@ -34,12 +35,12 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "WAKE_LOCK"
       ]
     },
     "web": {
@@ -70,7 +71,10 @@
         {
           "android": {
             "googleServicesFile": "./google-services.json",
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "buildToolsVersion": "34.0.0"
           }
         }
       ],

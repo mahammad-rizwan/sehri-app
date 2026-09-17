@@ -38,10 +38,13 @@ export default function SpecialCaseScreen() {
       const d = res.data.data;
       setData(d);
       // Pre-select already-allotted users so re-allotment keeps them
+      // But only if allotment is not locked (before 6 PM)
       const keep = new Set<string>();
-      (d?.want || []).forEach((w: SpecialCase) => {
-        if (w.sehriAllowed === true) keep.add(w.userId);
-      });
+      if (!d?.allotmentLocked) {
+        (d?.want || []).forEach((w: SpecialCase) => {
+          if (w.sehriAllowed === true) keep.add(w.userId);
+        });
+      }
       setSelected(keep);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to load special cases' });
@@ -65,17 +68,22 @@ export default function SpecialCaseScreen() {
 
   const confirmAllot = () => {
     const count = selected.size;
+    const totalWant = want.length;
     if (count === 0) {
       Toast.show({ type: 'info', text1: 'Select at least one person to allot Sehri' });
       return;
     }
+    if (data?.allotmentLocked) {
+      Toast.show({ type: 'error', text1: 'Allotment is locked after 6 PM — no changes allowed' });
+      return;
+    }
     Alert.alert(
       'Allot Sehri to Special Cases',
-      `Confirm Sehri for ${count} person(s)?\n\nNotified: ${count} get "Sehri Confirmed", others get "No Sehri" (5–6 PM window).`,
+      `Confirm Sehri for ${count} out of ${totalWant} person(s)?\n\n✅ Selected: ${count} get "Sehri Confirmed"\n❌ Not selected: ${totalWant - count} get "No Sehri"\n\nAll special-case users + all app users will be notified.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm & Notify', onPress: async () => {
+          text: 'Confirm & Notify All', onPress: async () => {
             setSubmitting(true);
             try {
               const res = await api.post(ENDPOINTS.SPECIAL_CASES_ALLOT, { userIds: Array.from(selected) });
@@ -120,14 +128,15 @@ export default function SpecialCaseScreen() {
   const renderWant = (row: SpecialCase) => {
     const isSelected = selected.has(row.userId);
     const decided = row.sehriAllowed === true || row.sehriAllowed === false;
+    const locked = data?.allotmentLocked;
     return (
       <TouchableOpacity
         key={row.userId}
         style={styles.row}
         onPress={() => {
-          if (data?.allotmentOpen) toggle(row.userId);
+          if (data?.allotmentOpen && !locked) toggle(row.userId);
         }}
-        activeOpacity={data?.allotmentOpen ? 0.7 : 1}
+        activeOpacity={(data?.allotmentOpen && !locked) ? 0.7 : 1}
       >
         <LinearGradient colors={['rgba(201,168,76,0.12)', 'rgba(201,168,76,0.03)']} style={styles.avatar}>
           <Text style={styles.avatarText}>{row.name?.charAt(0)?.toUpperCase() || '?'}</Text>
@@ -137,13 +146,19 @@ export default function SpecialCaseScreen() {
           <Text style={styles.rowMeta}>{zemoji(row.zone)} {zlabel(row.zone)} • {row.address || '-'}</Text>
           <Text style={styles.rowMeta}>Requested at {fmtTime(row.time)} • 📱 {row.phone}</Text>
         </View>
-        {decided ? (
+        {locked && decided ? (
+          row.sehriAllowed === true ? (
+            <View style={styles.yesSolidBadge}><Text style={styles.yesSolidText}>✅ Confirmed</Text></View>
+          ) : (
+            <View style={styles.noBadge}><Text style={styles.noBadgeText}>❌ Not Allotted</Text></View>
+          )
+        ) : decided ? (
           row.sehriAllowed === true ? (
             <View style={styles.yesSolidBadge}><Text style={styles.yesSolidText}>✅ Allotted</Text></View>
           ) : (
             <View style={styles.noBadge}><Text style={styles.noBadgeText}>❌ No</Text></View>
           )
-        ) : data?.allotmentOpen ? (
+        ) : data?.allotmentOpen && !locked ? (
           <Ionicons
             name={isSelected ? 'checkbox' : 'square-outline'}
             size={26}
@@ -207,22 +222,32 @@ export default function SpecialCaseScreen() {
           {want.length > 0 && (
             <View style={styles.summary}>
               <Text style={styles.summaryText}>
-                Tick the people you want to allot Sehri. Selected: {selected.size}
+                {data?.allotmentLocked 
+                  ? '🔒 Allotment is final — no changes after 6:00 PM' 
+                  : `Tick the people you want to allot Sehri. Selected: ${selected.size} / ${want.length}`}
               </Text>
-              <TouchableOpacity
-                style={[styles.allotBtn, { opacity: (data?.allotmentOpen && !submitting) ? 1 : 0.5 }]}
-                onPress={confirmAllot}
-                disabled={!data?.allotmentOpen || submitting}
-                activeOpacity={0.85}
-              >
-                <LinearGradient colors={[COLORS.primary, COLORS.primaryLight]} style={styles.allotBtnInner}>
-                  {submitting
-                    ? <ActivityIndicator color="#0D1B2A" size="small" />
-                    : <Text style={styles.allotBtnText}>🎁 Confirm & Allocate Sehri</Text>}
-                </LinearGradient>
-              </TouchableOpacity>
-              {!data?.allotmentOpen && (
-                <Text style={styles.lockText}>Sehri can be allotted only between 5:00 PM and 6:00 PM.</Text>
+              {!data?.allotmentLocked && (
+                <TouchableOpacity
+                  style={[styles.allotBtn, { opacity: (data?.allotmentOpen && !submitting) ? 1 : 0.5 }]}
+                  onPress={confirmAllot}
+                  disabled={!data?.allotmentOpen || submitting}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient colors={[COLORS.primary, COLORS.primaryLight]} style={styles.allotBtnInner}>
+                    {submitting
+                      ? <ActivityIndicator color="#0D1B2A" size="small" />
+                      : <Text style={styles.allotBtnText}>🎁 Confirm & Notify All Users</Text>}
+                  </LinearGradient>
+                </TouchableOpacity>
+              )}
+              {!data?.allotmentOpen && !data?.allotmentLocked && (
+                <Text style={styles.lockText}>⏰ Allotment window: 5:00 PM — 6:00 PM only</Text>
+              )}
+              {data?.allotmentLocked && (
+                <View style={styles.finalBadge}>
+                  <Ionicons name="lock-closed" size={16} color={COLORS.accentRed} />
+                  <Text style={styles.finalText}>Final decisions — locked at 6:00 PM</Text>
+                </View>
               )}
             </View>
           )}
@@ -264,4 +289,6 @@ const styles = StyleSheet.create({
   allotBtnInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
   allotBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   lockText: { color: COLORS.accentOrange, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  finalBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', backgroundColor: 'rgba(239,83,80,0.1)', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(239,83,80,0.3)' },
+  finalText: { color: COLORS.accentRed, fontSize: 13, fontWeight: '700' },
 });
