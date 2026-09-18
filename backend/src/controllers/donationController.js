@@ -1,4 +1,3 @@
-const { Op } = require('sequelize');
 const { Donation } = require('../models');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
@@ -35,6 +34,9 @@ const submitDonation = async (req, res) => {
       message,
     } = req.body;
 
+    logger.info(`[submitDonation] req.body: ${JSON.stringify(req.body)}`);
+    logger.info(`[submitDonation] amountRaw: "${amountRaw}" (type: ${typeof amountRaw})`);
+
     const is_anonymous = isAnonRaw === 'true' || isAnonRaw === true;
 
     if (!is_anonymous && !donor_name?.trim()) {
@@ -42,6 +44,7 @@ const submitDonation = async (req, res) => {
     }
 
     const declaredAmount = amountRaw ? parseFloat(amountRaw) : null;
+    logger.info(`[submitDonation] declaredAmount: ${declaredAmount}`);
     if (declaredAmount !== null && (isNaN(declaredAmount) || declaredAmount <= 0)) {
       return error(res, 'Invalid amount', 400);
     }
@@ -75,7 +78,7 @@ const submitDonation = async (req, res) => {
       ],
     });
 
-    logger.info(`Donation submitted: ${donationId} ₹${declaredAmount} by ${req.user.name}`);
+    logger.info(`Donation submitted: ${donationId} amount=${declaredAmount || 'null'} by ${req.user.name} (anonymous: ${is_anonymous})`);
 
     return success(res, { donationId }, 'Donation submitted successfully', 201);
   } catch (err) {
