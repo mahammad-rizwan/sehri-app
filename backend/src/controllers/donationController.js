@@ -13,6 +13,8 @@ const logger = require('../utils/logger');
 const submitDonation = async (req, res) => {
   try {
     const { donor_name, message, amount: amountRaw, is_anonymous: isAnonymousRaw = false } = req.body;
+    logger.info(`submitDonation body: donor_name=${donor_name}, amount=${amountRaw}, is_anonymous=${isAnonymousRaw}`);
+    logger.info(`submitDonation file: ${req.file?.originalname}, size=${req.file?.size}`);
     const is_anonymous = isAnonymousRaw === 'true' || isAnonymousRaw === true;
 
     if (!req.file) {
