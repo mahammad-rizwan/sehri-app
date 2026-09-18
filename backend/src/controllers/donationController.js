@@ -50,24 +50,34 @@ const submitDonation = async (req, res) => {
       return error(res, 'User zone is required', 400);
     }
 
-    const donation = await Donation.create({
-      id:           require('uuid').v4(),
-      user_id:      req.user.id,
-      donor_name:   is_anonymous ? req.user.name : (donor_name?.trim() || req.user.name),
-      donor_phone:  req.user.phone,
-      donor_zone:   req.user.zone,
-      is_anonymous: is_anonymous ? 1 : 0,
-      amount:       declaredAmount,
-      status:       'pending',
-      message:      message?.trim() || null,
-      proof_url:    `/uploads/donations/${req.file.filename}`,
+    const { sequelize } = require('../database/connection');
+    const donationId = require('uuid').v4();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    await sequelize.query(`
+      INSERT INTO donations
+        (id, user_id, donor_name, donor_phone, donor_zone, is_anonymous, amount, status, message, proof_url, created_at, updated_at)
+      VALUES
+        (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+    `, {
+      replacements: [
+        donationId,
+        req.user.id,
+        is_anonymous ? req.user.name : (donor_name?.trim() || req.user.name),
+        req.user.phone,
+        req.user.zone,
+        is_anonymous ? 1 : 0,
+        declaredAmount,
+        message?.trim() || null,
+        `/uploads/donations/${req.file.filename}`,
+        now,
+        now,
+      ],
     });
 
-    logger.info(`Donation submitted: ${donation.id} ₹${declaredAmount} by ${donation.donor_name}`);
+    logger.info(`Donation submitted: ${donationId} ₹${declaredAmount} by ${req.user.name}`);
 
-    return success(res, {
-      donationId: donation.id,
-    }, 'Donation submitted successfully', 201);
+    return success(res, { donationId }, 'Donation submitted successfully', 201);
   } catch (err) {
     logger.error('submitDonation error:', err);
     return error(res, 'Failed to submit donation', 500);
@@ -84,24 +94,40 @@ const updateDonationStatus = async (req, res) => {
       return error(res, 'Status must be "paid" or "rejected"', 400);
     }
 
-    const donation = await Donation.findByPk(id);
-    if (!donation) return error(res, 'Donation not found', 404);
-
-    const updates = { status };
-
     if (status === 'paid') {
       const parsed = parseFloat(amount);
       if (!amount || isNaN(parsed) || parsed <= 0) {
         return error(res, 'A valid amount is required to accept a donation', 400);
       }
-      updates.amount = parsed;
     }
 
-    await donation.update(updates);
+    const { sequelize } = require('../database/connection');
 
-    logger.info(`Donation ${id} → ${status}${updates.amount ? ` ₹${updates.amount}` : ''}`);
+    // Check exists
+    const [[existing]] = await sequelize.query(
+      'SELECT id, status, amount FROM donations WHERE id = ? LIMIT 1',
+      { replacements: [id] }
+    );
+    if (!existing) return error(res, 'Donation not found', 404);
 
-    return success(res, fmtDonation(donation), 'Donation status updated');
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    if (status === 'paid') {
+      const parsed = parseFloat(amount);
+      await sequelize.query(
+        'UPDATE donations SET status = ?, amount = ?, updated_at = ? WHERE id = ?',
+        { replacements: ['paid', parsed, now, id] }
+      );
+      logger.info(`Donation ${id} → paid ₹${parsed}`);
+      return success(res, { id, status: 'paid', amount: String(parsed) }, 'Donation accepted');
+    } else {
+      await sequelize.query(
+        'UPDATE donations SET status = ?, updated_at = ? WHERE id = ?',
+        { replacements: ['rejected', now, id] }
+      );
+      logger.info(`Donation ${id} → rejected`);
+      return success(res, { id, status: 'rejected' }, 'Donation rejected');
+    }
   } catch (err) {
     logger.error('updateDonationStatus error:', err);
     return error(res, 'Failed to update donation status', 500);
