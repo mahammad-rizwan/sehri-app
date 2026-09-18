@@ -3,65 +3,55 @@ const { sequelize } = require('../database/connection');
 
 const Donation = sequelize.define('Donation', {
   id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
+    type: DataTypes.CHAR(36),
     primaryKey: true,
+    defaultValue: DataTypes.UUIDV4,
   },
   user_id: {
-    type: DataTypes.UUID,
+    type: DataTypes.CHAR(36),
     allowNull: false,
-    comment: 'Always store real user ID — is_anonymous only controls display',
-  },
-  amount: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: true,
-    comment: 'Amount is manually entered by super admin after proof verification',
-  },
-  currency: {
-    type: DataTypes.STRING(3),
-    defaultValue: 'INR',
-  },
-  status: {
-    type: DataTypes.ENUM('pending', 'paid', 'rejected'),
-    defaultValue: 'pending',
   },
   donor_name: {
     type: DataTypes.STRING(100),
     allowNull: false,
-    comment: 'Always store real name — is_anonymous only controls display',
   },
   donor_phone: {
     type: DataTypes.STRING(15),
     allowNull: false,
-    comment: 'Always store real phone — is_anonymous only controls display',
   },
   donor_zone: {
     type: DataTypes.ENUM('masjid', 'boys_hostel', 'stanza', 'girls'),
     allowNull: false,
-    comment: 'Donor zone for admin filtering',
+  },
+  is_anonymous: {
+    type: DataTypes.TINYINT,
+    allowNull: false,
+    defaultValue: 0,
+  },
+  amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: true,
+    defaultValue: null,
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'paid', 'rejected'),
+    allowNull: false,
+    defaultValue: 'pending',
   },
   message: {
     type: DataTypes.TEXT,
     allowNull: true,
-  },
-  is_anonymous: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false,
-    comment: 'UI display flag only — real donor info always stored in DB',
+    defaultValue: null,
   },
   proof_url: {
     type: DataTypes.STRING(500),
     allowNull: true,
+    defaultValue: null,
   },
 }, {
   tableName: 'donations',
-  underscored: true,
-  indexes: [
-    { fields: ['user_id'] },
-    { fields: ['status'] },
-    { fields: ['donor_zone'] },
-    { fields: ['is_anonymous'] },
-  ],
+  underscored: true,   // maps createdAt → created_at, updatedAt → updated_at
+  timestamps: true,
 });
 
 module.exports = Donation;
