@@ -2,10 +2,6 @@ const { Donation } = require('../models');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
 
-// VERSION MARKER FOR RAILWAY DEPLOYMENT TRACKING - FORCE REBUILD
-const CONTROLLER_VERSION = '2026-09-18-16:35-DEBUG-FORCE-REBUILD';
-console.log(`donationController loaded - VERSION: ${CONTROLLER_VERSION}`);
-
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const fmtDonation = (d) => ({
   id:           d.id,
@@ -23,27 +19,7 @@ const fmtDonation = (d) => ({
 
 // ─── POST /donations/submit ────────────────────────────────────────────────────
 const submitDonation = async (req, res) => {
-  console.log('=== SUBMIT DONATION CALLED - NEW VERSION ===');
-  console.log('req.body:', req.body);
-  console.log('req.file:', req.file ? req.file.filename : 'null');
-  
   try {
-    logger.info('═══ FormData Received (decoded by multer) ═══');
-    logger.info('req.body fields:');
-    Object.keys(req.body || {}).forEach((key, index) => {
-      logger.info(`  [${index}] ${key}: ${req.body[key]}`);
-    });
-    if (req.file) {
-      logger.info('req.file:');
-      logger.info(`  filename: ${req.file.filename}`);
-      logger.info(`  mimetype: ${req.file.mimetype}`);
-      logger.info(`  size: ${req.file.size} bytes`);
-      logger.info(`  path: ${req.file.path}`);
-    } else {
-      logger.info('req.file: null');
-    }
-    logger.info('═══════════════════════════════════════════════');
-
     if (!req.file) {
       return error(res, 'Payment proof image is required', 400);
     }
@@ -100,14 +76,9 @@ const submitDonation = async (req, res) => {
       ],
     });
 
-    logger.info(`Donation submitted: ${donationId} amount=${declaredAmount || 'null'} by ${req.user.name} (anonymous: ${is_anonymous})`);
+    logger.info(`Donation submitted: ${donationId} by ${req.user.name}`);
 
-return success(
-  res,
-  {
-    id: donationId,
-    amount: declaredAmount,
-  },
+    return success(res, { donationId }, 'Donation submitted successfully', 201);
   'Donation submitted successfully',
   201
 );
@@ -220,8 +191,6 @@ const getDonationSummary = async (req, res) => {
       proof_url:    d.proof_url || null,
       created_at:   d.created_at,
     }));
-
-    logger.info(`getDonationSummary: returning ${donations.length} donations. First donation created_at: ${donations[0]?.created_at}, amount: ${donations[0]?.amount}`);
 
     return success(res, {
       total_amount:    parseFloat(totals.total_amount),
