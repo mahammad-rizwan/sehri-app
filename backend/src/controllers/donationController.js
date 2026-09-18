@@ -19,8 +19,23 @@ const fmtDonation = (d) => ({
 
 // ─── POST /donations/submit ────────────────────────────────────────────────────
 const submitDonation = async (req, res) => {
-  console.log(req.body)
   try {
+    logger.info('═══ FormData Received (decoded by multer) ═══');
+    logger.info('req.body fields:');
+    Object.keys(req.body || {}).forEach((key, index) => {
+      logger.info(`  [${index}] ${key}: ${req.body[key]}`);
+    });
+    if (req.file) {
+      logger.info('req.file:');
+      logger.info(`  filename: ${req.file.filename}`);
+      logger.info(`  mimetype: ${req.file.mimetype}`);
+      logger.info(`  size: ${req.file.size} bytes`);
+      logger.info(`  path: ${req.file.path}`);
+    } else {
+      logger.info('req.file: null');
+    }
+    logger.info('═══════════════════════════════════════════════');
+
     if (!req.file) {
       return error(res, 'Payment proof image is required', 400);
     }
@@ -34,10 +49,6 @@ const submitDonation = async (req, res) => {
       amount: amountRaw,
       message,
     } = req.body;
-
-    const body=req.body;
-
-    logger.info(`[submitDonation] req.body: ${JSON.stringify(req.body)}`);
     logger.info(`[submitDonation] amountRaw: "${amountRaw}" (type: ${typeof amountRaw})`);
 
     const is_anonymous = isAnonRaw === 'true' || isAnonRaw === true;
