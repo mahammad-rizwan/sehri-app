@@ -78,6 +78,7 @@ export default function AdminDonationHistory() {
     try {
       const res = await api.get(ENDPOINTS.DONATION_ALL);
       const d   = res.data.data;
+      console.log('[Donations] First donation:', d.donations?.[0]);
       setSummary({
         total_amount:    Number(d.total_amount    || 0),
         total_donations: Number(d.total_donations || 0),

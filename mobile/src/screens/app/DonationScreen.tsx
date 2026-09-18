@@ -111,6 +111,7 @@ export default function DonationScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    console.log("amount"+amount);
     if (!isAnonymous && !donorName.trim()) {
       Toast.show({ type: 'error', text1: 'Enter your name or choose anonymous' });
       return;
