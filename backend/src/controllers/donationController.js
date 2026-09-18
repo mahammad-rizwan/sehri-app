@@ -28,10 +28,11 @@ const submitDonation = async (req, res) => {
       return error(res, 'Donor name is required', 400);
     }
 
-    // Parse and validate user-declared amount
+    // Parse user-declared amount — optional, admin will verify
     const declaredAmount = amountRaw ? parseFloat(amountRaw) : null;
-    if (!declaredAmount || isNaN(declaredAmount) || declaredAmount <= 0) {
-      return error(res, 'Please enter the amount you paid', 400);
+    // Only validate if provided — if not provided we still accept (admin sets final amount)
+    if (declaredAmount !== null && (isNaN(declaredAmount) || declaredAmount <= 0)) {
+      return error(res, 'Invalid amount entered', 400);
     }
 
     // Always store REAL information regardless of is_anonymous flag
