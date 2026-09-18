@@ -14,6 +14,12 @@ const { notifyAllUsers } = require('./services/expoPushService');
 const { setupSocket } = require('./services/socketService');
 const { fetchAndSavePrayerTimings } = require('./controllers/prayerController');
 
+// ═══ VERSION TRACKING ═══
+const APP_VERSION = '2026-09-18-16:50-FORCE-DEPLOY';
+console.log('═══════════════════════════════════════════════════');
+console.log(`🚀 SERVER STARTING - VERSION: ${APP_VERSION}`);
+console.log('═══════════════════════════════════════════════════');
+
 // Import routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
