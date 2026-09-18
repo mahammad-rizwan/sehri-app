@@ -42,11 +42,14 @@ export default function AdminDashboard() {
       setTomorrowStats(statsRes.data.data);
       const liveActive = statsRes.data.data?.isPollActive ?? statsRes.data.data?.poll?.is_active;
       if (liveActive !== undefined) setPollActive(liveActive);
-      if (isSuperAdmin) {
-        try { const donRes = await api.get(ENDPOINTS.DONATION_SUMMARY); setDonationSummary(donRes.data.data); } catch {}
-      } else {
-        // Admin can see totals but not full history
-        try { const donRes = await api.get(ENDPOINTS.DONATION_SUMMARY); setDonationSummary(donRes.data.data); } catch {}
+      
+      // Fetch donation summary for both admin and super admin
+      try { 
+        const donRes = await api.get(ENDPOINTS.DONATION_SUMMARY); 
+        console.log('[AdminDashboard] Donation summary:', donRes.data.data);
+        setDonationSummary(donRes.data.data); 
+      } catch (err) {
+        console.error('[AdminDashboard] Failed to fetch donation summary:', err);
       }
     } catch {}
   };

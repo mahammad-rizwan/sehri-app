@@ -156,11 +156,6 @@ export default function ChatListScreen() {
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
-      {/* Back to Dashboard */}
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/(app)/admin/dashboard' as any)} activeOpacity={0.7}>
-        <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
-        <Text style={styles.backBtnText}>Dashboard</Text>
-      </TouchableOpacity>
       <FlatList
         data={groups}
         keyExtractor={(item) => item.id}
@@ -192,8 +187,6 @@ export default function ChatListScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
-  backBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
   listContent: { padding: SIZES.spacing.base, paddingTop: SIZES.spacing.lg, paddingBottom: 100 },
   groupCard: {
     flexDirection: 'row',

@@ -136,14 +136,6 @@ export default function PollHistoryScreen() {
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
-      <View style={[styles.topBar, { paddingTop: insets.top, height: insets.top + (Platform.OS === 'ios' ? 44 : 56) }]}>
-        <View style={styles.topBarContent}>
-          <TouchableOpacity onPress={() => router.push('/(app)/home' as any)} style={styles.backBtn} activeOpacity={0.7}>
-            <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
-            <Text style={styles.backBtnText}>Home</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>My Poll History</Text>
@@ -260,19 +252,6 @@ export default function PollHistoryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: {
-    justifyContent: 'flex-end',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.border,
-    backgroundColor: '#050D16',
-  },
-  topBarContent: {
-    flexDirection: 'row', alignItems: 'center',
-    height: Platform.OS === 'ios' ? 44 : 56,
-    paddingHorizontal: 4,
-  },
-  backBtn:     { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  backBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '500' },
   header: { paddingTop: 16, paddingBottom: 24, paddingHorizontal: 20 },
   headerTitle: { color: COLORS.textPrimary, fontSize: 26, fontWeight: '800' },
   headerSub: { color: COLORS.textSecondary, fontSize: 13, marginTop: 4 },

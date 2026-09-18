@@ -108,10 +108,14 @@ export default function ProfileScreen() {
               const { switchRole } = useAuthStore.getState();
               try {
                 const targetRole = user?.hasSuperAdminRole ? 'super_admin' : 'admin';
+                console.log('[Switch Role] Attempting to switch to:', targetRole);
                 await switchRole(targetRole);
+                console.log('[Switch Role] Success!');
                 router.replace('/(app)/admin/dashboard');
               } catch (err: any) {
-                Alert.alert('Error', err?.response?.data?.message || 'Failed to switch mode');
+                console.error('[Switch Role] Error:', err);
+                const errorMsg = err?.response?.data?.message || err?.message || 'Failed to switch mode';
+                Alert.alert('Error Switching Mode', errorMsg);
               }
             }}
             style={styles.switchBtn}

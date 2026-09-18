@@ -4,7 +4,8 @@ import {
   TextInput, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, ZONE_CONFIG } from '../../../constants/theme';
 import { useAuthStore } from '../../../store/authStore';
 import PremiumCard from '../../../components/ui/PremiumCard';
@@ -23,6 +24,7 @@ interface AdminUser {
 }
 
 export default function ManageAdmins() {
+  const router = useRouter();
   const { user, activeRole } = useAuthStore();
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);

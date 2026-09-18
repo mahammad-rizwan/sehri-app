@@ -40,7 +40,7 @@ const SUPER_ADMIN_VISIBLE = new Set(SUPER_ADMIN_TAB_ORDER);
 const ROOT_SCREENS = new Set(['home', 'admin/dashboard']);
 
 // Screens whose layout header should NOT show a back button
-const NO_BACK = new Set(['home', 'admin/dashboard', 'dua/index', 'dua/category/[id]', 'dua/bookmarks', 'quran/surah/index', 'donation', 'tracking', 'profile', 'feedback', 'poll-history']);
+const NO_BACK = new Set(['home', 'admin/dashboard', 'dua/index', 'dua/category/[id]', 'dua/bookmarks', 'quran/surah/index', 'donation', 'tracking', 'profile', 'feedback']);
 
 // ─── Tab icon ─────────────────────────────────────────────────────────────────
 function TabIcon({ icon, iconActive, focused }: { icon: string; iconActive: string; focused: boolean }) {
@@ -159,12 +159,18 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 // ─── Header back button ───────────────────────────────────────────────────────
-function BackBtn({ target }: { target: string }) {
+function BackBtn({ target, name }: { target: string; name: string }) {
   const router = useRouter();
+  
+  // Special case: individual chat screens go back to chat list and show "Back"
+  const isIndividualChat = name.startsWith('admin/chat/') && name !== 'admin/chat/index' && name !== 'admin/chat/create';
+  const label = isIndividualChat ? 'Back' : (target.includes('admin') ? 'Dashboard' : 'Home');
+  const destination = isIndividualChat ? '/(app)/admin/chat' : target;
+  
   return (
-    <TouchableOpacity onPress={() => router.push(target as any)} style={styles.backBtn} activeOpacity={0.7}>
+    <TouchableOpacity onPress={() => router.push(destination as any)} style={styles.backBtn} activeOpacity={0.7}>
       <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
-      <Text style={styles.backBtnText}>{target.includes('admin') ? 'Dashboard' : 'Home'}</Text>
+      <Text style={styles.backBtnText}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -176,7 +182,7 @@ function getHeaderOptions(name: string, homeTarget: string) {
     headerTitle: name === 'quran/surah/index' ? 'Al-Quran' : '',
     headerStyle: { backgroundColor: COLORS.background },
     headerShadowVisible: false,
-    headerLeft: () => <BackBtn target={homeTarget} />,
+    headerLeft: () => <BackBtn target={homeTarget} name={name} />,
   };
 }
 
@@ -225,7 +231,7 @@ export default function AppLayout() {
     return [
       ...visible,
       'admin/chat/[id]', 'admin/chat/create', 'admin/tracking',
-      'admin/feedback', 'admin/donation-history',
+      'admin/feedback', 'admin/donation-history', 'admin/special-cases',
       'feedback', 'poll-history', 'rider',
     ];
   }, [activeRole]);

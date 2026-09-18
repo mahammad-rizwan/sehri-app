@@ -44,7 +44,7 @@ const upload = multer({
 router.post('/submit', authenticate, upload.single('proof'), submitDonation);
 router.patch('/:id/status', authenticate, authorize('super_admin'), updateDonationStatus);
 router.get('/history', authenticate, getDonationHistory);
-router.get('/summary', authenticate, authorize('super_admin'), getDonationSummary);
+router.get('/summary', authenticate, authorize('admin', 'super_admin'), getDonationSummary);
 router.get('/:id/proof', authenticate, authorize('admin', 'super_admin'), getDonationProof);
 
 // Multer error handler (file too large / wrong type)

@@ -338,14 +338,6 @@ export default function ChatScreen() {
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
       <TouchableOpacity style={styles.headerBar} onPress={() => setMemberModal(true)} activeOpacity={0.8}>
-        <TouchableOpacity
-          onPress={() => router.push('/(app)/admin/chat' as any)}
-          style={styles.headerBackBtn}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
-        </TouchableOpacity>
         <LinearGradient colors={[COLORS.primary, COLORS.primaryLight]} style={styles.headerAvatar}>
           <Text style={styles.headerAvatarText}>{groupName?.charAt(0)?.toUpperCase() || '#'}</Text>
         </LinearGradient>
@@ -353,7 +345,6 @@ export default function ChatScreen() {
           <Text style={styles.headerName} numberOfLines={1}>{groupName || 'Chat'}</Text>
           <Text style={styles.headerMeta}>{members.length} members</Text>
         </View>
-        <Ionicons name="chevron-down" size={18} color={COLORS.textMuted} />
       </TouchableOpacity>
 
       <View style={{ flex: 1, paddingBottom: keyboardH }}>
@@ -495,8 +486,9 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  topBackBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  topBackBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
   headerBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SIZES.spacing.base, paddingVertical: SIZES.spacing.sm, backgroundColor: COLORS.backgroundCard, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  headerBackBtn: { marginRight: 8, padding: 2 },
   headerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   headerAvatarText: { color: COLORS.textOnPrimary, fontSize: 18, fontWeight: '800' },
   headerInfo: { flex: 1 },

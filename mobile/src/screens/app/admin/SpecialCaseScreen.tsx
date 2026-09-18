@@ -187,9 +187,6 @@ export default function SpecialCaseScreen() {
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}>
         <View style={styles.header}>
           <IslamicGeometric opacity={0.07} size={240} />
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.8}>
-            <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
-          </TouchableOpacity>
           <Text style={styles.title}>⭐ Special Cases</Text>
           <Text style={styles.subtitle}>Sehri for {data?.displayLabel || ''}</Text>
           <View style={[styles.windowBadge, { borderColor: data?.allotmentOpen ? 'rgba(76,175,80,0.5)' : 'rgba(255,152,0,0.4)' }]}>
@@ -259,8 +256,7 @@ export default function SpecialCaseScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingTop: 54, paddingBottom: 14 },
-  backBtn: { position: 'absolute', top: 52, left: 16, zIndex: 2, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },
+  header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14 },
   title: { color: COLORS.textPrimary, fontSize: 24, fontWeight: '800' },
   subtitle: { color: COLORS.textSecondary, fontSize: 13, marginTop: 2 },
   windowBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, borderRadius: 12, padding: 10, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.03)' },
