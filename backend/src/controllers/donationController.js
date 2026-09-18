@@ -195,43 +195,30 @@ const getDonationSummary = async (req, res) => {
       raw: true,
     });
 
-    // All donations with full details (for super admin view)
-    const allDonations = await Donation.findAll({
-      include: [
-        {
-          model: User,
-          attributes: ['id', 'name', 'phone', 'zone'],
-          required: false,
-        },
-      ],
-      order: [['created_at', 'DESC']],
-      limit: 100,
-    });
+    // All donations with full details — use raw query to avoid Sequelize timestamp mapping issues
+    const [rawDonations] = await sequelize.query(`
+      SELECT 
+        id, amount, status, donor_name, donor_phone, donor_zone,
+        is_anonymous, message, proof_url, user_id,
+        DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%s.000Z') AS created_at
+      FROM donations
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
 
-    // Format donations for response
-    const formattedDonations = allDonations.map(d => {
-      const raw = d.dataValues || d;
-      // Safely serialize created_at
-      let createdAt = null;
-      try {
-        const ts = raw.created_at || raw.createdAt;
-        if (ts) createdAt = new Date(ts).toISOString();
-      } catch {}
-
-      return {
-        id: raw.id,
-        amount: raw.amount !== null && raw.amount !== undefined ? String(raw.amount) : null,
-        status: raw.status,
-        donor_name: raw.donor_name,
-        donor_phone: raw.donor_phone,
-        donor_zone: raw.donor_zone,
-        is_anonymous: raw.is_anonymous,
-        message: raw.message,
-        proof_url: raw.proof_url,
-        created_at: createdAt,
-        user_id: raw.user_id,
-      };
-    });
+    const formattedDonations = rawDonations.map(d => ({
+      id: d.id,
+      amount: d.amount !== null && d.amount !== undefined ? String(d.amount) : null,
+      status: d.status,
+      donor_name: d.donor_name,
+      donor_phone: d.donor_phone,
+      donor_zone: d.donor_zone,
+      is_anonymous: Boolean(d.is_anonymous),
+      message: d.message,
+      proof_url: d.proof_url,
+      created_at: d.created_at,
+      user_id: d.user_id,
+    }));
 
     return success(res, {
       total_amount: parseFloat(summary[0]?.total || 0),
