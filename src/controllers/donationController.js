@@ -79,9 +79,6 @@ const submitDonation = async (req, res) => {
     logger.info(`Donation submitted: ${donationId} by ${req.user.name}`);
 
     return success(res, { donationId }, 'Donation submitted successfully', 201);
-  'Donation submitted successfully',
-  201
-);
   } catch (err) {
     logger.error('submitDonation error:', err);
     return error(res, 'Failed to submit donation', 500);
