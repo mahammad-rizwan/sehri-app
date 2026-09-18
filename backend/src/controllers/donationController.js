@@ -2,8 +2,8 @@ const { Donation } = require('../models');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
 
-// VERSION MARKER FOR RAILWAY DEPLOYMENT TRACKING
-const CONTROLLER_VERSION = '2026-09-18-16:30-DEBUG';
+// VERSION MARKER FOR RAILWAY DEPLOYMENT TRACKING - FORCE REBUILD
+const CONTROLLER_VERSION = '2026-09-18-16:35-DEBUG-FORCE-REBUILD';
 console.log(`donationController loaded - VERSION: ${CONTROLLER_VERSION}`);
 
 // ─── Helper ───────────────────────────────────────────────────────────────────

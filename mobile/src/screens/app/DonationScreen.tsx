@@ -144,6 +144,21 @@ export default function DonationScreen() {
         type: mimeType,
       } as any);
 
+      // Debug FormData - since FormData doesn't have .entries() in React Native,
+      // we access the internal _parts array (undocumented but works)
+      console.log('═══ FormData Debug ═══');
+      if ((formData as any)._parts) {
+        (formData as any)._parts.forEach((part: any, index: number) => {
+          const [key, value] = part;
+          if (typeof value === 'object' && value.uri) {
+            console.log(`[${index}] ${key}:`, { name: value.name, type: value.type, uri: value.uri.substring(0, 50) + '...' });
+          } else {
+            console.log(`[${index}] ${key}:`, value);
+          }
+        });
+      }
+      console.log('═══ End FormData ═══');
+
       await api.postForm(ENDPOINTS.SUBMIT_DONATION, formData);
 
       Toast.show({
