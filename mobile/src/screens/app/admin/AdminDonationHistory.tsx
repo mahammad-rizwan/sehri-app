@@ -60,9 +60,6 @@ export default function AdminDonationHistory() {
     try {
       const res = await api.get(ENDPOINTS.DONATION_ALL);
       const d = res.data.data;
-      if (d.donations?.length > 0) {
-        console.log('[Donations] raw[0]:', JSON.stringify(d.donations[0]));
-      }
       setData(d);
       setDonations(d.donations || []);
     } catch (err: any) {

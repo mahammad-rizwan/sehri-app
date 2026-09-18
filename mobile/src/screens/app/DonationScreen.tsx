@@ -151,15 +151,17 @@ export default function DonationScreen() {
       setLoading(true);
       const formData = new FormData();
       const ext = proofName?.split('.').pop() || 'jpg';
+      // Text fields MUST come before the file so multer populates req.body correctly
+      formData.append('is_anonymous', String(isAnonymous));
+      formData.append('donor_name', isAnonymous ? '' : donorName.trim());
+      formData.append('amount', amount.trim());
+      formData.append('message', message.trim());
+      // File last
       formData.append('proof', {
         uri: proofUri,
         name: proofName || 'payment-proof.jpg',
         type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
       } as any);
-      formData.append('is_anonymous', String(isAnonymous));
-      formData.append('donor_name', isAnonymous ? '' : donorName.trim());
-      formData.append('amount', amount.trim());
-      formData.append('message', message.trim());
 
       await api.postForm(ENDPOINTS.SUBMIT_DONATION, formData);
 
