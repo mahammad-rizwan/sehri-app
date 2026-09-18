@@ -34,10 +34,11 @@ const STATUS = {
 
 const fmtDate = (s: string | null) => {
   if (!s) return '—';
-  const d = new Date(s);
+  // Replace space separator with T so Android parses it correctly
+  const d = new Date(s.replace(' ', 'T'));
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-    + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    + '  ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 };
 
 const fmtAmt = (a: string | null) =>

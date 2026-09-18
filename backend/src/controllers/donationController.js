@@ -168,7 +168,7 @@ const getDonationSummary = async (req, res) => {
       SELECT
         id, user_id, donor_name, donor_phone, donor_zone,
         is_anonymous, amount, status, message, proof_url,
-        DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%sZ') AS created_at
+        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
       FROM donations
       ORDER BY created_at DESC
       LIMIT 200
