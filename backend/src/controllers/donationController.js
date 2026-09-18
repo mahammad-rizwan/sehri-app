@@ -191,6 +191,8 @@ const getDonationSummary = async (req, res) => {
       created_at:   d.created_at,
     }));
 
+    logger.info(`getDonationSummary: returning ${donations.length} donations. First donation created_at: ${donations[0]?.created_at}, amount: ${donations[0]?.amount}`);
+
     return success(res, {
       total_amount:    parseFloat(totals.total_amount),
       total_donations: parseInt(totals.total_donations),
