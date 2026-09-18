@@ -27,6 +27,7 @@ export const ENDPOINTS = {
   USERS: '/users',
   USER_STATUS: (id: string) => `/users/${id}/status`,
   USER_DELETE: (id: string) => `/users/${id}`,
+  DELETE_MY_ACCOUNT: '/users/me',
   REQUEST_PROFILE_EDIT: '/users/request-profile-edit',
   PROFILE_EDIT_REQUESTS: '/users/profile-edit-requests',
 

@@ -260,12 +260,61 @@ const reviewProfileEditRequest = async (req, res) => {
   }
 };
 
+/**
+ * DELETE /users/me
+ * Delete current user's account (self-deletion)
+ * Only deletes from User, Admin, and SuperAdmin tables
+ * Preserves foreign key records (donations, poll responses, etc.)
+ */
+const deleteMyAccount = async (req, res) => {
+  try {
+    const userPhone = req.user.phone;
+    const userId = req.user.id;
+    
+    // Use transaction to ensure all deletions happen together
+    const { sequelize } = require('../models');
+    const transaction = await sequelize.transaction();
+    
+    try {
+      // Delete from SuperAdmin table if exists
+      await SuperAdmin.destroy({ 
+        where: { phone: userPhone }, 
+        transaction 
+      });
+      
+      // Delete from Admin table if exists
+      await Admin.destroy({ 
+        where: { phone: userPhone }, 
+        transaction 
+      });
+      
+      // Delete from User table
+      await User.destroy({ 
+        where: { id: userId }, 
+        transaction 
+      });
+      
+      await transaction.commit();
+      
+      logger.info(`User ${userId} (${userPhone}) deleted their own account`);
+      return success(res, {}, 'Account deleted successfully');
+    } catch (transactionErr) {
+      await transaction.rollback();
+      throw transactionErr;
+    }
+  } catch (err) {
+    logger.error('deleteMyAccount error:', err);
+    return error(res, 'Failed to delete account', 500);
+  }
+};
+
 module.exports = {
   getMe,
   requestProfileEdit,
   listUsers,
   updateUserStatus,
   deleteUser,
+  deleteMyAccount,
   promoteToAdmin,
   getProfileEditRequests,
   reviewProfileEditRequest,

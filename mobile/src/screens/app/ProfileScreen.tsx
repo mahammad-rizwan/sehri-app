@@ -70,7 +70,6 @@ export default function ProfileScreen() {
         <PremiumCard style={styles.card}>
           <Text style={styles.cardTitle}>Profile Information</Text>
           {[
-            { label: 'Gender', value: user?.gender },
             { label: 'Zone', value: zoneInfo?.label || user?.zone },
             { label: 'Address', value: user?.address || 'N/A' },
           ].map(({ label, value }) => (
@@ -147,13 +146,45 @@ export default function ProfileScreen() {
           <Text style={styles.quoteSource}>— Prophet Muhammad ﷺ</Text>
         </LinearGradient>
 
+        {/* Delete Account */}
+        <GoldButton
+          title="Delete Account 🗑️"
+          onPress={async () => {
+            Alert.alert(
+              'Delete Account',
+              'Are you sure you want to delete your account? This action cannot be undone. Your poll responses and donations will be preserved for record-keeping.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const { logout } = useAuthStore.getState();
+                      await api.delete(ENDPOINTS.DELETE_MY_ACCOUNT);
+                      Alert.alert('Account Deleted', 'Your account has been successfully deleted.');
+                      await logout();
+                      router.replace('/(auth)/login');
+                    } catch (err: any) {
+                      Alert.alert('Error', err?.response?.data?.message || 'Failed to delete account');
+                    }
+                  },
+                },
+              ]
+            );
+          }}
+          variant="outline"
+          style={styles.deleteBtn}
+          textStyle={{ color: COLORS.accentRed }}
+        />
+
         {/* Logout */}
         <GoldButton
           title="Logout 🚪"
           onPress={handleLogout}
           variant="outline"
           style={styles.logoutBtn}
-          textStyle={{ color: COLORS.accentRed }}
+          textStyle={{ color: COLORS.textSecondary }}
         />
       </ScrollView>
     </LinearGradient>
@@ -198,7 +229,8 @@ const styles = StyleSheet.create({
   quoteText: { color: COLORS.textPrimary, fontSize: SIZES.sm, fontStyle: 'italic', textAlign: 'center' },
   quoteSource: { color: COLORS.primary, fontSize: SIZES.xs, textAlign: 'right', marginTop: 6 },
   switchBtn: { marginTop: SIZES.spacing.md },
-  logoutBtn: { marginTop: SIZES.spacing.md, borderColor: COLORS.accentRed },
+  deleteBtn: { marginTop: SIZES.spacing.md, borderColor: COLORS.accentRed },
+  logoutBtn: { marginTop: SIZES.spacing.sm, borderColor: COLORS.border },
   pollHistoryRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   pollHistoryIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(171,71,188,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(171,71,188,0.35)' },
   pollHistoryInfo: { flex: 1 },

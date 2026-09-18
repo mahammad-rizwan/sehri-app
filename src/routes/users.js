@@ -7,6 +7,7 @@ const {
   listUsers,
   updateUserStatus,
   deleteUser,
+  deleteMyAccount,
   promoteToAdmin,
   getProfileEditRequests,
   reviewProfileEditRequest,
@@ -14,6 +15,7 @@ const {
 
 // User routes
 router.get('/me', authenticate, getMe);
+router.delete('/me', authenticate, deleteMyAccount);
 router.post('/request-profile-edit', authenticate, requestProfileEdit);
 
 // Admin routes
