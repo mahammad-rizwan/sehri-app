@@ -55,6 +55,7 @@ const Donation = sequelize.define('Donation', {
   },
 }, {
   tableName: 'donations',
+  underscored: true,
   indexes: [
     { fields: ['user_id'] },
     { fields: ['status'] },

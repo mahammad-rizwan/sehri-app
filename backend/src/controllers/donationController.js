@@ -210,25 +210,26 @@ const getDonationSummary = async (req, res) => {
 
     // Format donations for response
     const formattedDonations = allDonations.map(d => {
-      // Safely serialize created_at — Sequelize may return a Date object or string
+      const raw = d.dataValues || d;
+      // Safely serialize created_at
       let createdAt = null;
       try {
-        const raw = d.get ? d.get('created_at') : d.created_at;
-        if (raw) createdAt = new Date(raw).toISOString();
+        const ts = raw.created_at || raw.createdAt;
+        if (ts) createdAt = new Date(ts).toISOString();
       } catch {}
 
       return {
-        id: d.id,
-        amount: d.amount !== null && d.amount !== undefined ? String(d.amount) : null,
-        status: d.status,
-        donor_name: d.donor_name,
-        donor_phone: d.donor_phone,
-        donor_zone: d.donor_zone,
-        is_anonymous: d.is_anonymous,
-        message: d.message,
-        proof_url: d.proof_url,
+        id: raw.id,
+        amount: raw.amount !== null && raw.amount !== undefined ? String(raw.amount) : null,
+        status: raw.status,
+        donor_name: raw.donor_name,
+        donor_phone: raw.donor_phone,
+        donor_zone: raw.donor_zone,
+        is_anonymous: raw.is_anonymous,
+        message: raw.message,
+        proof_url: raw.proof_url,
         created_at: createdAt,
-        user_id: d.user_id,
+        user_id: raw.user_id,
       };
     });
 

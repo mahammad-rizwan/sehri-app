@@ -60,9 +60,8 @@ export default function AdminDonationHistory() {
     try {
       const res = await api.get(ENDPOINTS.DONATION_ALL);
       const d = res.data.data;
-      // Debug: log first donation to see raw shape
       if (d.donations?.length > 0) {
-        console.log('[Donations] first item:', JSON.stringify(d.donations[0]));
+        console.log('[Donations] raw[0]:', JSON.stringify(d.donations[0]));
       }
       setData(d);
       setDonations(d.donations || []);
@@ -286,11 +285,14 @@ export default function AdminDonationHistory() {
                       <Text style={st.amountLabel}>
                         {d.status === 'pending' ? 'Declared Amount' : 'Amount'}
                       </Text>
-                      <Text style={[st.amountValue, d.status === 'pending' && { color: COLORS.accentOrange }]}>
-                        {d.amount ? `₹${Number(d.amount).toLocaleString()}` : 'Not provided'}
+                      <Text style={[st.amountValue, d.status === 'pending' && d.amount && { color: COLORS.accentOrange }]}>
+                        {d.amount ? `₹${Number(d.amount).toLocaleString()}` : '—'}
                       </Text>
                       {d.status === 'pending' && d.amount ? (
-                        <Text style={st.amountNote}>⚠️ Pending verification</Text>
+                        <Text style={st.amountNote}>⚠️ User declared — verify before accepting</Text>
+                      ) : null}
+                      {d.status === 'pending' && !d.amount ? (
+                        <Text style={st.amountNote}>Enter amount when accepting</Text>
                       ) : null}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
