@@ -272,7 +272,7 @@ const deleteMyAccount = async (req, res) => {
     const userId = req.user.id;
     
     // Use transaction to ensure all deletions happen together
-    const { sequelize } = require('../models');
+    const { sequelize } = require('../database/connection');
     const transaction = await sequelize.transaction();
     
     try {
