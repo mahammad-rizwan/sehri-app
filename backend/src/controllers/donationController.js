@@ -2,6 +2,10 @@ const { Donation } = require('../models');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
 
+// VERSION MARKER FOR RAILWAY DEPLOYMENT TRACKING
+const CONTROLLER_VERSION = '2026-09-18-16:30-DEBUG';
+console.log(`donationController loaded - VERSION: ${CONTROLLER_VERSION}`);
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 const fmtDonation = (d) => ({
   id:           d.id,
@@ -19,6 +23,10 @@ const fmtDonation = (d) => ({
 
 // ─── POST /donations/submit ────────────────────────────────────────────────────
 const submitDonation = async (req, res) => {
+  console.log('=== SUBMIT DONATION CALLED - NEW VERSION ===');
+  console.log('req.body:', req.body);
+  console.log('req.file:', req.file ? req.file.filename : 'null');
+  
   try {
     logger.info('═══ FormData Received (decoded by multer) ═══');
     logger.info('req.body fields:');
