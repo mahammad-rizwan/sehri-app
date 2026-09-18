@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
@@ -44,6 +45,16 @@ export default function DonationScreen() {
 
   // ── Download QR ──────────────────────────────────────────────────────────
   const downloadQr = async () => {
+    // Check if running in Expo Go
+    if (Constants.appOwnership === 'expo') {
+      Alert.alert(
+        'Feature Unavailable',
+        'QR download requires a custom build. Please use the production app or take a screenshot of the QR code.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       // Request permissions
       const { status } = await MediaLibrary.requestPermissionsAsync();
