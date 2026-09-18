@@ -19,6 +19,7 @@ const fmtDonation = (d) => ({
 
 // ─── POST /donations/submit ────────────────────────────────────────────────────
 const submitDonation = async (req, res) => {
+  console.log(req.body)
   try {
     if (!req.file) {
       return error(res, 'Payment proof image is required', 400);
@@ -33,6 +34,8 @@ const submitDonation = async (req, res) => {
       amount: amountRaw,
       message,
     } = req.body;
+
+    const body=req.body;
 
     logger.info(`[submitDonation] req.body: ${JSON.stringify(req.body)}`);
     logger.info(`[submitDonation] amountRaw: "${amountRaw}" (type: ${typeof amountRaw})`);
@@ -80,7 +83,7 @@ const submitDonation = async (req, res) => {
 
     logger.info(`Donation submitted: ${donationId} amount=${declaredAmount || 'null'} by ${req.user.name} (anonymous: ${is_anonymous})`);
 
-    return success(res, { donationId }, 'Donation submitted successfully', 201);
+    return success(res, { body }, 'Donation body submitted successfully', 201);
   } catch (err) {
     logger.error('submitDonation error:', err);
     return error(res, 'Failed to submit donation', 500);
