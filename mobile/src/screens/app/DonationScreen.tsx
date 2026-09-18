@@ -45,37 +45,78 @@ export default function DonationScreen() {
   // ── Download QR ──────────────────────────────────────────────────────────
   const downloadQr = async () => {
     try {
+      // Request permissions
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission needed', 'Allow photo access to save the QR code.');
         return;
       }
-      const [asset]   = await Asset.loadAsync(QR_IMAGE);
+
+      // Load the asset from bundle
+      const [asset] = await Asset.loadAsync(QR_IMAGE);
+      
+      // Ensure asset is downloaded to local storage
+      if (!asset.downloaded) {
+        await asset.downloadAsync();
+      }
+
       const sourceUri = asset.localUri ?? asset.uri;
+      
       if (!sourceUri) {
         Toast.show({ type: 'error', text1: 'Could not locate QR image' });
+        console.error('[QR Download] No source URI found');
         return;
       }
+
+      console.log('[QR Download] Source URI:', sourceUri);
+
+      // Create destination path in cache
       const destUri = `${FileSystem.cacheDirectory}donation-qr-${Date.now()}.jpeg`;
+      console.log('[QR Download] Dest URI:', destUri);
+
+      // Copy or download the file
       if (sourceUri.startsWith('file://') || sourceUri.startsWith('/')) {
-        await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+        const cleanSource = sourceUri.startsWith('file://') ? sourceUri : `file://${sourceUri}`;
+        await FileSystem.copyAsync({ from: cleanSource, to: destUri });
+        console.log('[QR Download] Copied from local file');
       } else {
         const result = await FileSystem.downloadAsync(sourceUri, destUri);
+        console.log('[QR Download] Download result:', result.status);
         if (result.status !== 200) {
           Toast.show({ type: 'error', text1: 'Failed to fetch QR image' });
           return;
         }
       }
+
+      // Verify the file exists
       const info = await FileSystem.getInfoAsync(destUri);
+      console.log('[QR Download] File exists:', info.exists, 'Size:', (info as any).size);
+      
       if (!info.exists) {
         Toast.show({ type: 'error', text1: 'QR file not found after download' });
         return;
       }
+
+      // Save to gallery
       const mediaAsset = await MediaLibrary.createAssetAsync(destUri);
-      await MediaLibrary.createAlbumAsync('Sehri Connect', mediaAsset, false);
+      console.log('[QR Download] Media asset created:', mediaAsset.id);
+      
+      // Try to create album, but don't fail if it already exists
+      try {
+        await MediaLibrary.createAlbumAsync('Sehri Connect', mediaAsset, false);
+      } catch (albumErr) {
+        // Album might already exist, that's fine
+        console.log('[QR Download] Album creation note:', albumErr);
+      }
+
       Toast.show({ type: 'success', text1: 'QR code saved to gallery ✅' });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Could not save QR code', text2: err?.message });
+      console.error('[QR Download] Error:', err);
+      Toast.show({ 
+        type: 'error', 
+        text1: 'Could not save QR code', 
+        text2: err?.message || 'Unknown error' 
+      });
     }
   };
 
