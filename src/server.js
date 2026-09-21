@@ -133,6 +133,7 @@ const startServer = async () => {
   // Additive schema top-up so a deploy never ships code that queries a column
   // or table the database has not got yet.
   await ensureSchema().catch((err) => logger.error('ensureSchema failed:', err.message));
+  require('./services/storageService').reportStorageMode();
   scheduleReminders();
   schedulePrayerTimings();
 

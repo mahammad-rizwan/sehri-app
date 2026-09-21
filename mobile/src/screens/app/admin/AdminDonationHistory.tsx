@@ -34,11 +34,9 @@ const STATUS = {
 };
 
 const fmtDate = (s: string | null) => {
-  console.log("s"+s);
   if (!s) return '—';
   // Replace space separator with T so Android parses it correctly
   const d = new Date(s.replace(' ', 'T'));
-  console.log("d"+d);
   if (isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
     + '  ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
@@ -57,6 +55,12 @@ export default function AdminDonationHistory() {
   const [donations,  setDonations]  = useState<Donation[]>([]);
   const [filtered,   setFiltered]   = useState<Donation[]>([]);
   const [zone,       setZone]       = useState('all');
+  // Pending first — that is the queue the super admin actually has to work.
+  const [status,     setStatus]     = useState<'pending' | 'paid' | 'rejected' | 'all'>('pending');
+  const [limit,      setLimit]      = useState<'20' | '30' | '40' | '50' | 'all'>('20');
+  const [limitOpen,  setLimitOpen]  = useState(false);
+  const [counts,     setCounts]     = useState({ pending: 0, paid: 0, rejected: 0, all: 0 });
+  const [totalMatching, setTotalMatching] = useState(0);
 
   // Proof modal
   const [proofVisible, setProofVisible] = useState(false);
@@ -78,29 +82,32 @@ export default function AdminDonationHistory() {
     }
   }, [activeRole]);
 
+  // Filtering runs on the server so a long history is never shipped to the
+  // phone just to be discarded client-side.
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await api.get(ENDPOINTS.DONATION_ALL);
+      const res = await api.get(ENDPOINTS.DONATION_ALL, { zone, status, limit });
       const d   = res.data.data;
       setSummary({
         total_amount:    Number(d.total_amount    || 0),
         total_donations: Number(d.total_donations || 0),
       });
       setDonations(d.donations || []);
+      setCounts(d.status_counts || { pending: 0, paid: 0, rejected: 0, all: 0 });
+      setTotalMatching(Number(d.total_matching || 0));
     } catch (err: any) {
       Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to load' });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [zone, status, limit]);
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    setFiltered(zone === 'all' ? donations : donations.filter(d => d.donor_zone === zone));
-  }, [zone, donations]);
+  // The server already applied the filters.
+  useEffect(() => { setFiltered(donations); }, [donations]);
 
   // ── Totals update locally ────────────────────────────────────────────────
   const adjustTotals = (prev: Donation, newStatus: 'paid' | 'rejected', newAmt: number | null) => {
@@ -136,6 +143,10 @@ export default function AdminDonationHistory() {
         text1: newStatus === 'paid' ? '✅ Accepted' : '❌ Rejected',
         text2: newStatus === 'paid' && newAmt ? `₹${newAmt.toLocaleString()} added to total` : undefined,
       });
+
+      // Resync so the item drops out of the Pending queue and the zone and
+      // status counters reflect the change.
+      load(true);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Action failed' });
     } finally {
@@ -251,12 +262,84 @@ export default function AdminDonationHistory() {
             ))}
           </ScrollView>
 
-          <Text style={st.sectionTitle}>Transactions ({filtered.length})</Text>
+          {/* Status filter */}
+          <Text style={st.sectionTitle}>Filter by Status</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.filterRow}>
+            {([
+              { k: 'pending',  label: '⏳ Pending',  n: counts.pending },
+              { k: 'paid',     label: '✅ Accepted', n: counts.paid },
+              { k: 'rejected', label: '❌ Rejected', n: counts.rejected },
+              { k: 'all',      label: 'All',        n: counts.all },
+            ] as const).map((o) => (
+              <TouchableOpacity
+                key={o.k}
+                style={[st.chip, status === o.k && st.chipActive]}
+                onPress={() => setStatus(o.k)}
+                activeOpacity={0.7}
+              >
+                <Text style={[st.chipText, status === o.k && st.chipTextActive]}>
+                  {o.label}{o.n ? ` (${o.n})` : ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Count + how many to show */}
+          <View style={st.listHeader}>
+            <Text style={st.sectionTitle}>
+              Transactions ({filtered.length}
+              {limit !== 'all' && totalMatching > filtered.length ? ` of ${totalMatching}` : ''})
+            </Text>
+
+            <View>
+              <TouchableOpacity
+                style={st.limitBtn}
+                onPress={() => setLimitOpen((v) => !v)}
+                activeOpacity={0.8}
+              >
+                <Text style={st.limitBtnTxt}>
+                  {limit === 'all' ? 'All' : `Last ${limit}`}
+                </Text>
+                <Ionicons name={limitOpen ? 'chevron-up' : 'chevron-down'} size={14} color={COLORS.primary} />
+              </TouchableOpacity>
+
+              {limitOpen && (
+                <View style={st.limitMenu}>
+                  {(['20', '30', '40', '50', 'all'] as const).map((o) => (
+                    <TouchableOpacity
+                      key={o}
+                      style={[st.limitOpt, limit === o && st.limitOptOn]}
+                      onPress={() => { setLimit(o); setLimitOpen(false); }}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[st.limitOptTxt, limit === o && st.limitOptTxtOn]}>
+                        {o === 'all' ? 'All donations' : `Last ${o}`}
+                      </Text>
+                      {limit === o && <Ionicons name="checkmark" size={14} color={COLORS.primary} />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
 
           {filtered.length === 0 ? (
             <View style={st.empty}>
               <Text style={{ fontSize: 48 }}>🌙</Text>
-              <Text style={st.emptyText}>No donations found</Text>
+              <Text style={st.emptyText}>
+                {status === 'pending'
+                  ? 'Nothing waiting for verification'
+                  : 'No donations match this filter'}
+              </Text>
+              {(zone !== 'all' || status !== 'all') && (
+                <TouchableOpacity
+                  onPress={() => { setZone('all'); setStatus('all'); }}
+                  style={{ marginTop: 12 }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={st.clearFilters}>Clear filters</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             filtered.map((d) => {
@@ -444,6 +527,32 @@ export default function AdminDonationHistory() {
 }
 
 const st = StyleSheet.create({
+  listHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', zIndex: 20,
+  },
+  limitBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderWidth: 1, borderColor: COLORS.primary, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6,
+    backgroundColor: 'rgba(201,168,76,0.08)',
+  },
+  limitBtnTxt: { color: COLORS.primary, fontSize: 12, fontWeight: '700' },
+  limitMenu: {
+    position: 'absolute', top: 34, right: 0, zIndex: 30,
+    minWidth: 150, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: COLORS.backgroundCard, paddingVertical: 4,
+    shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 }, elevation: 10,
+  },
+  limitOpt: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 9,
+  },
+  limitOptOn:    { backgroundColor: 'rgba(201,168,76,0.10)' },
+  limitOptTxt:   { color: COLORS.textSecondary, fontSize: 12.5 },
+  limitOptTxtOn: { color: COLORS.primary, fontWeight: '700' },
+  clearFilters:  { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
   proofFallback:      { alignItems: 'center', paddingVertical: 40, gap: 10, paddingHorizontal: 20 },
   proofFallbackTitle: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
   proofFallbackSub:   { color: COLORS.textMuted, fontSize: 12, textAlign: 'center', lineHeight: 18 },

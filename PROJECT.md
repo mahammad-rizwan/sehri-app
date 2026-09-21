@@ -147,7 +147,14 @@ Presented as three numbered steps, in the order the donor actually works through
   ⏳ Awaiting verification / ✅ Verified / ❌ Not accepted, with a running total of
   everything verified. (`GET /donations/history` existed but had no UI.)
 - Total donated displayed on HomeScreen for all users
-- Super admin sees full donation history table with donor details + anonymous badge
+- Super admin donation panel filters **server-side**:
+  - **Zone** — all zones by default
+  - **Status** — **Pending by default**, since that is the queue that needs work;
+    also Accepted, Rejected and All, each with a live count
+  - **How many** — dropdown: Last 20 (default), 30, 40, 50, or All
+- Accepting or rejecting reloads the list, so the item leaves the Pending queue
+  and the zone/status counters update
+- Donor details + anonymous badge shown throughout
 
 ### 5. Admin Chat (Group Messaging)
 - Groups created by super admin only; members can be any mix of users, admins, super admins
@@ -266,7 +273,7 @@ Admins see all feedback and mark it read/unread as before.
 | POST | `/submit` | Any | Submit donation + proof image (multipart) |
 | PATCH | `/:id/status` | super_admin | Accept (`paid` + amount) or reject |
 | GET | `/history` | Any | Own donation history |
-| GET | `/summary` | admin/super_admin | Totals + full donation list |
+| GET | `/summary` | admin/super_admin | Totals + filtered list (`?zone=&status=&limit=`) |
 | GET | `/:id/proof` | admin/super_admin | Stream the proof image |
 
 ### Feedback `/api/feedback`

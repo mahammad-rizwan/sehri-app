@@ -86,6 +86,15 @@ const submitDonation = async (req, res) => {
     return success(res, { donationId }, 'Donation submitted successfully', 201);
   } catch (err) {
     logger.error('submitDonation error:', err);
+    if (err.message === 'PROOF_UPLOAD_FAILED') {
+      // Tell the donor plainly rather than accepting a donation whose proof we
+      // could not actually store.
+      return error(
+        res,
+        'We could not save your payment proof just now, so the donation was not recorded. Please try again in a moment.',
+        503,
+      );
+    }
     return error(res, 'Failed to submit donation', 500);
   }
 };
@@ -156,11 +165,58 @@ const getDonationHistory = async (req, res) => {
 };
 
 // ─── GET /donations/summary (super admin) ─────────────────────────────────────
+const ZONES = ['masjid', 'boys_hostel', 'stanza', 'girls'];
+const STATUSES = ['pending', 'paid', 'rejected'];
+const LIMITS = [20, 30, 40, 50];
+
+/**
+ * Filtered donation list plus the totals the admin panel needs.
+ *
+ * Query params (all optional):
+ *   zone   masjid | boys_hostel | stanza | girls | all   (default all)
+ *   status pending | paid | rejected | all               (default all)
+ *   limit  20 | 30 | 40 | 50 | all                        (default 20)
+ *
+ * Filtering runs in SQL rather than the client so a long donation history does
+ * not get shipped to the phone just to be thrown away.
+ */
 const getDonationSummary = async (req, res) => {
   try {
     const { sequelize } = require('../database/connection');
 
-    // Totals — only paid donations count
+    const zone   = ZONES.includes(req.query.zone) ? req.query.zone : null;
+    const status = STATUSES.includes(req.query.status) ? req.query.status : null;
+
+    const rawLimit = req.query.limit;
+    const limit = rawLimit === 'all'
+      ? null
+      : (LIMITS.includes(parseInt(rawLimit, 10)) ? parseInt(rawLimit, 10) : 20);
+
+    // ── Filtered list ────────────────────────────────────────────────────────
+    const where = [];
+    const params = [];
+    if (zone)   { where.push('donor_zone = ?'); params.push(zone); }
+    if (status) { where.push('status = ?');     params.push(status); }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    const [rows] = await sequelize.query(`
+      SELECT
+        id, user_id, donor_name, donor_phone, donor_zone,
+        is_anonymous, amount, status, message, proof_url,
+        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+      FROM donations
+      ${whereSql}
+      ORDER BY created_at DESC
+      ${limit ? 'LIMIT ?' : ''}
+    `, { replacements: limit ? [...params, limit] : params });
+
+    // How many match the filter in total, so the UI can say "20 of 87".
+    const [[matching]] = await sequelize.query(
+      `SELECT COUNT(*) AS n FROM donations ${whereSql}`,
+      { replacements: params },
+    );
+
+    // ── Totals: always all-time and verified-only, never filtered ───────────
     const [[totals]] = await sequelize.query(`
       SELECT
         COALESCE(SUM(amount), 0)  AS total_amount,
@@ -169,16 +225,16 @@ const getDonationSummary = async (req, res) => {
       WHERE status = 'paid'
     `);
 
-    // All donations — raw SQL guarantees correct created_at format
-    const [rows] = await sequelize.query(`
+    // ── Counts per status within the selected zone, for the filter chips ────
+    const zoneOnly = zone ? 'WHERE donor_zone = ?' : '';
+    const [[counts]] = await sequelize.query(`
       SELECT
-        id, user_id, donor_name, donor_phone, donor_zone,
-        is_anonymous, amount, status, message, proof_url,
-        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
-      FROM donations
-      ORDER BY created_at DESC
-      LIMIT 200
-    `);
+        SUM(CASE WHEN status = 'pending'  THEN 1 ELSE 0 END) AS pending,
+        SUM(CASE WHEN status = 'paid'     THEN 1 ELSE 0 END) AS paid,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+        COUNT(*) AS all_count
+      FROM donations ${zoneOnly}
+    `, { replacements: zone ? [zone] : [] });
 
     const donations = rows.map(d => ({
       id:           d.id,
@@ -197,11 +253,19 @@ const getDonationSummary = async (req, res) => {
     return success(res, {
       total_amount:    parseFloat(totals.total_amount),
       total_donations: parseInt(totals.total_donations),
+      status_counts: {
+        pending:  parseInt(counts.pending  || 0),
+        paid:     parseInt(counts.paid     || 0),
+        rejected: parseInt(counts.rejected || 0),
+        all:      parseInt(counts.all_count || 0),
+      },
+      applied: { zone: zone || 'all', status: status || 'all', limit: limit || 'all' },
+      total_matching: parseInt(matching.n),
       donations,
     });
   } catch (err) {
     logger.error('getDonationSummary error:', err);
-    return error(res, 'Failed to fetch donation summary', 500);
+    return error(res, `Failed to fetch donation summary: ${err.message}`, 500);
   }
 };
 

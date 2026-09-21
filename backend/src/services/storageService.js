@@ -2,9 +2,12 @@
  * Donation proof storage.
  *
  * Railway's filesystem is ephemeral — anything written to local disk is lost on
- * every redeploy. When Cloudinary credentials are present we upload there and
- * store the returned URL; otherwise we fall back to the original local-disk
- * behaviour so development and un-configured deploys keep working unchanged.
+ * every redeploy, so proofs must go to Cloudinary in production.
+ *
+ * Once CLOUDINARY_URL is configured there is NO disk fallback: if the upload
+ * fails the submission is rejected, because silently writing to a disk that
+ * gets wiped would look like success and lose the donor's proof. Disk is used
+ * only when Cloudinary is not configured at all (i.e. local development).
  *
  * Configure with either:
  *   CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
@@ -152,12 +155,33 @@ async function saveDonationProof(file) {
       logger.info('Donation proof uploaded to Cloudinary');
       return url;
     } catch (err) {
-      // Never lose the user's submission because the CDN is down — fall back to
-      // disk and let the warning surface the problem.
-      logger.error(`Cloudinary upload failed, falling back to local disk: ${err.message}`);
+      // Deliberately NOT falling back to disk here. Railway's filesystem is
+      // wiped on every redeploy, so a silent fallback would look like success
+      // and then lose the proof — the one outcome we must never allow. Failing
+      // the submission lets the donor retry while they still have the receipt.
+      logger.error(`Cloudinary upload failed, rejecting submission: ${err.message}`);
+      throw new Error('PROOF_UPLOAD_FAILED');
     }
   }
+
+  // No Cloudinary configured: development, or a deploy that has not been set up
+  // yet. Disk keeps things working, but the proof will not survive a restart.
+  logger.warn(
+    'CLOUDINARY_URL is not set — donation proof written to local disk and WILL BE LOST on restart',
+  );
   return saveToLocalDisk(file.buffer, file.originalname);
+}
+
+/** Logged once at boot so a misconfigured deploy is obvious immediately. */
+function reportStorageMode() {
+  const cfg = getCloudinaryConfig();
+  if (cfg) {
+    logger.info(`🗂️  Donation proofs → Cloudinary (cloud: ${cfg.cloudName})`);
+  } else if (process.env.CLOUDINARY_URL) {
+    logger.error('🗂️  CLOUDINARY_URL is set but malformed — proofs will go to disk and be LOST on restart');
+  } else {
+    logger.warn('🗂️  CLOUDINARY_URL not set — donation proofs go to local disk and are LOST on restart');
+  }
 }
 
 /** Streams a remote proof image back through the caller's response. */
@@ -186,6 +210,7 @@ function streamRemoteProof(url, res) {
 
 module.exports = {
   saveDonationProof,
+  reportStorageMode,
   streamRemoteProof,
   isCloudinaryEnabled,
   localUploadDir,
