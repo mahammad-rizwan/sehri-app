@@ -10,6 +10,7 @@ import { COLORS, ZONE_CONFIG, SHADOWS } from '../../../constants/theme';
 import { IslamicGeometric } from '../../../components/ui/IslamicPattern';
 import api from '../../../services/api';
 import { ENDPOINTS, API_BASE_URL } from '../../../constants/api';
+import * as SecureStore from 'expo-secure-store';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../../store/authStore';
 
@@ -59,7 +60,9 @@ export default function AdminDonationHistory() {
 
   // Proof modal
   const [proofVisible, setProofVisible] = useState(false);
-  const [proofData,    setProofData]    = useState<{ name: string; url: string } | null>(null);
+  const [proofData,    setProofData]    = useState<{ name: string; url: string; token: string } | null>(null);
+  const [proofLoading, setProofLoading] = useState(false);
+  const [proofError,   setProofError]   = useState(false);
 
   // Accept amount modal
   const [amountVisible,  setAmountVisible]  = useState(false);
@@ -172,9 +175,18 @@ export default function AdminDonationHistory() {
     setAmountInput('');
   };
 
-  const openProof = (d: Donation) => {
+  const openProof = async (d: Donation) => {
     if (!d.proof_url) { Toast.show({ type: 'info', text1: 'No proof uploaded' }); return; }
-    setProofData({ name: d.donor_name, url: `${API_BASE_URL}${d.proof_url}` });
+    // The proof route is admin-authenticated, and <Image> does not go through
+    // the axios interceptor, so the token has to be attached by hand.
+    const token = await SecureStore.getItemAsync('accessToken');
+    if (!token) { Toast.show({ type: 'error', text1: 'Session expired — please log in again' }); return; }
+    setProofData({
+      name: d.donor_name,
+      url: `${API_BASE_URL}${ENDPOINTS.DONATION_PROOF(d.id)}`,
+      token,
+    });
+    setProofLoading(true);
     setProofVisible(true);
   };
 
@@ -387,7 +399,7 @@ export default function AdminDonationHistory() {
       </Modal>
 
       {/* ── Proof Modal ── */}
-      <Modal visible={proofVisible} animationType="fade" transparent onRequestClose={() => setProofVisible(false)}>
+      <Modal visible={proofVisible} animationType="fade" transparent onRequestClose={() => { setProofVisible(false); setProofError(false); }}>
         <View style={st.overlay}>
           <View style={st.proofModal}>
             <View style={st.modalHdr}>
@@ -399,7 +411,29 @@ export default function AdminDonationHistory() {
             <Text style={st.modalSub}>{proofData?.name}</Text>
             {proofData && (
               <ScrollView contentContainerStyle={{ alignItems: 'center' }}>
-                <Image source={{ uri: proofData.url }} style={st.proofImg} resizeMode="contain" />
+                {proofError ? (
+                  <View style={st.proofFallback}>
+                    <Text style={{ fontSize: 34 }}>🖼️</Text>
+                    <Text style={st.proofFallbackTitle}>Could not load the proof</Text>
+                    <Text style={st.proofFallbackSub}>
+                      The image may have been lost in a redeploy. Set CLOUDINARY_URL so proofs
+                      are stored off the server's temporary disk.
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    {proofLoading && (
+                      <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 40 }} />
+                    )}
+                    <Image
+                      source={{ uri: proofData.url, headers: { Authorization: `Bearer ${proofData.token}` } }}
+                      style={[st.proofImg, proofLoading && { height: 0 }]}
+                      resizeMode="contain"
+                      onLoadEnd={() => setProofLoading(false)}
+                      onError={() => { setProofLoading(false); setProofError(true); }}
+                    />
+                  </>
+                )}
               </ScrollView>
             )}
           </View>
@@ -410,6 +444,9 @@ export default function AdminDonationHistory() {
 }
 
 const st = StyleSheet.create({
+  proofFallback:      { alignItems: 'center', paddingVertical: 40, gap: 10, paddingHorizontal: 20 },
+  proofFallbackTitle: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
+  proofFallbackSub:   { color: COLORS.textMuted, fontSize: 12, textAlign: 'center', lineHeight: 18 },
   container:  { flex: 1 },
   header:     { paddingHorizontal: 20, paddingTop: 54, paddingBottom: 14, position: 'relative' },
   backBtn:    { position: 'absolute', top: 52, left: 16, zIndex: 2, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)' },

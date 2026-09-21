@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Image,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -24,9 +25,28 @@ import Toast from 'react-native-toast-message';
 const UPI_ID   = '9632716392@axl';
 const QR_IMAGE = require('../../../assets/donation-qr.jpeg');
 
+type MyDonation = {
+  id: string;
+  amount: string | null;
+  status: 'pending' | 'paid' | 'rejected';
+  message: string | null;
+  is_anonymous: boolean;
+  created_at: string | null;
+};
+
+const STATUS_META = {
+  pending:  { label: 'Awaiting verification', color: COLORS.accentOrange, icon: '⏳' },
+  paid:     { label: 'Verified',              color: COLORS.accentGreen,  icon: '✅' },
+  rejected: { label: 'Not accepted',          color: COLORS.accentRed,    icon: '❌' },
+} as const;
+
 export default function DonationScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
+  const [tab, setTab] = useState<'give' | 'mine'>('give');
+  const [mine, setMine] = useState<MyDonation[]>([]);
+  const [loadingMine, setLoadingMine] = useState(true);
+  const [refreshingMine, setRefreshingMine] = useState(false);
   const { user } = useAuthStore();
 
   const [donorName,   setDonorName]   = useState('');
@@ -162,6 +182,24 @@ export default function DonationScreen() {
   };
 
   // ── Submit ────────────────────────────────────────────────────────────────
+  const loadMine = useCallback(async () => {
+    try {
+      const { data } = await api.get(ENDPOINTS.DONATION_HISTORY);
+      setMine(data.data || []);
+    } catch {
+      // Non-fatal — the give form still works without the history.
+    } finally {
+      setLoadingMine(false);
+      setRefreshingMine(false);
+    }
+  }, []);
+
+  useEffect(() => { loadMine(); }, [loadMine]);
+
+  const totalGiven = mine
+    .filter((d) => d.status === 'paid')
+    .reduce((sum, d) => sum + (parseFloat(d.amount || '0') || 0), 0);
+
   const handleSubmit = async () => {
     console.log("amount"+amount);
     if (!isAnonymous && !donorName.trim()) {
@@ -204,6 +242,10 @@ export default function DonationScreen() {
         text2: 'Your donation has been submitted for verification.',
       });
 
+      // Pull it straight into My Donations so the user sees it land as pending.
+      loadMine();
+      setTab('mine');
+
       // Reset form
       setDonorName('');
       setAmount('');
@@ -243,6 +285,104 @@ export default function DonationScreen() {
         </View>
       </View>
 
+      {/* Give / My Donations */}
+      <View style={st.tabs}>
+        <TouchableOpacity
+          style={[st.tab, tab === 'give' && st.tabOn]}
+          onPress={() => setTab('give')}
+          activeOpacity={0.85}
+        >
+          <Text style={[st.tabTxt, tab === 'give' && st.tabTxtOn]}>🎁 Donate</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[st.tab, tab === 'mine' && st.tabOn]}
+          onPress={() => setTab('mine')}
+          activeOpacity={0.85}
+        >
+          <Text style={[st.tabTxt, tab === 'mine' && st.tabTxtOn]}>
+            📜 My Donations{mine.length ? ` (${mine.length})` : ''}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {tab === 'mine' ? (
+        <ScrollView
+          contentContainerStyle={st.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshingMine}
+              onRefresh={() => { setRefreshingMine(true); loadMine(); }}
+              tintColor={COLORS.primary}
+            />
+          }
+        >
+          {/* Running total of everything actually verified */}
+          <LinearGradient colors={['rgba(201,168,76,0.18)', 'rgba(201,168,76,0.04)']} style={st.totalCard}>
+            <Text style={st.totalLabel}>YOUR VERIFIED CONTRIBUTION</Text>
+            <Text style={st.totalValue}>₹{totalGiven.toLocaleString('en-IN')}</Text>
+            <Text style={st.totalSub}>
+              {mine.filter((d) => d.status === 'paid').length} verified
+              {mine.some((d) => d.status === 'pending')
+                ? ` • ${mine.filter((d) => d.status === 'pending').length} awaiting verification`
+                : ''}
+            </Text>
+          </LinearGradient>
+
+          {loadingMine ? (
+            <ActivityIndicator color={COLORS.primary} style={{ marginTop: 40 }} />
+          ) : mine.length === 0 ? (
+            <View style={st.empty}>
+              <Text style={{ fontSize: 40 }}>🤲</Text>
+              <Text style={st.emptyTitle}>No donations yet</Text>
+              <Text style={st.emptySub}>Your contributions will appear here once you submit one.</Text>
+              <TouchableOpacity onPress={() => setTab('give')} style={{ marginTop: 14 }} activeOpacity={0.7}>
+                <Text style={st.emptyLink}>Make your first donation</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            mine.map((d) => {
+              const meta = STATUS_META[d.status] || STATUS_META.pending;
+              return (
+                <View key={d.id} style={[st.mineCard, { borderLeftColor: meta.color }]}>
+                  <View style={st.mineTop}>
+                    <Text style={st.mineAmount}>
+                      {d.amount ? `₹${parseFloat(d.amount).toLocaleString('en-IN')}` : 'Amount pending'}
+                    </Text>
+                    <View style={[st.statusPill, { borderColor: meta.color, backgroundColor: meta.color + '22' }]}>
+                      <Text style={[st.statusTxt, { color: meta.color }]}>{meta.icon} {meta.label}</Text>
+                    </View>
+                  </View>
+
+                  {d.message ? <Text style={st.mineMsg}>"{d.message}"</Text> : null}
+
+                  <View style={st.mineFooter}>
+                    <Text style={st.mineDate}>
+                      {d.created_at
+                        ? new Date(d.created_at.replace(' ', 'T')).toLocaleString('en-IN', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })
+                        : '—'}
+                    </Text>
+                    {d.is_anonymous && <Text style={st.anonBadge}>Anonymous</Text>}
+                  </View>
+
+                  {d.status === 'pending' && (
+                    <Text style={st.mineHint}>
+                      A super admin is checking your payment proof. This usually takes a few hours.
+                    </Text>
+                  )}
+                  {d.status === 'rejected' && (
+                    <Text style={[st.mineHint, { color: COLORS.accentRed }]}>
+                      The proof could not be verified. Contact your zone admin if you think this is wrong.
+                    </Text>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      ) : (
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
 
@@ -378,11 +518,50 @@ export default function DonationScreen() {
           <Text style={st.secureNote}>🔒 Your proof is only used to verify your donation.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
+      )}
     </LinearGradient>
   );
 }
 
 const st = StyleSheet.create({
+  tabs:  { flexDirection: 'row', gap: 8, paddingHorizontal: SIZES.spacing.base, paddingVertical: SIZES.spacing.sm },
+  tab:   {
+    flex: 1, paddingVertical: 9, borderRadius: SIZES.radius.md,
+    borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: COLORS.backgroundSecondary, alignItems: 'center',
+  },
+  tabOn:    { borderColor: COLORS.primary, backgroundColor: 'rgba(201,168,76,0.14)' },
+  tabTxt:   { color: COLORS.textSecondary, fontSize: 13, fontWeight: '600' },
+  tabTxtOn: { color: COLORS.primary, fontWeight: '700' },
+
+  totalCard:  { borderRadius: SIZES.radius.lg, padding: SIZES.spacing.lg, alignItems: 'center', marginBottom: SIZES.spacing.base },
+  totalLabel: { color: COLORS.textMuted, fontSize: 9.5, fontWeight: '800', letterSpacing: 1 },
+  totalValue: { color: COLORS.primary, fontSize: 32, fontWeight: '800', marginTop: 6 },
+  totalSub:   { color: COLORS.textSecondary, fontSize: 11.5, marginTop: 4 },
+
+  mineCard: {
+    backgroundColor: COLORS.backgroundCard, borderRadius: SIZES.radius.lg,
+    borderWidth: 1, borderColor: COLORS.border, borderLeftWidth: 3,
+    padding: SIZES.spacing.base, marginBottom: SIZES.spacing.sm,
+  },
+  mineTop:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  mineAmount: { color: COLORS.textPrimary, fontSize: 17, fontWeight: '800' },
+  statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  statusTxt:  { fontSize: 9.5, fontWeight: '700' },
+  mineMsg:    { color: COLORS.textSecondary, fontSize: 13, fontStyle: 'italic', marginTop: 8, lineHeight: 19 },
+  mineFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  mineDate:   { color: COLORS.textMuted, fontSize: 10.5 },
+  anonBadge:  {
+    color: COLORS.textMuted, fontSize: 9, fontWeight: '700',
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: 4,
+    paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden',
+  },
+  mineHint:   { color: COLORS.textMuted, fontSize: 11, lineHeight: 16, marginTop: 8 },
+
+  empty:      { alignItems: 'center', paddingVertical: 60, gap: 8 },
+  emptyTitle: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
+  emptySub:   { color: COLORS.textMuted, fontSize: 12.5, textAlign: 'center', paddingHorizontal: 30 },
+  emptyLink:  { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
   stepRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: SIZES.spacing.sm },
   stepBadge: {
     width: 22, height: 22, borderRadius: 11,

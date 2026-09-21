@@ -143,6 +143,9 @@ Presented as three numbered steps, in the order the donor actually works through
 - Optional anonymous mode — hides from history UI but stores real data for admin records
 - Proof images go to Cloudinary when credentials are set, local disk otherwise, and are
   only ever served back through the authenticated `/donations/:id/proof` route
+- **My Donations** tab: the user's own contributions, each tagged
+  ⏳ Awaiting verification / ✅ Verified / ❌ Not accepted, with a running total of
+  everything verified. (`GET /donations/history` existed but had no UI.)
 - Total donated displayed on HomeScreen for all users
 - Super admin sees full donation history table with donor details + anonymous badge
 
@@ -696,7 +699,8 @@ The app ships for **both Android and iOS**. What that required:
 |---|---|---|
 | 1 | **Rotate the agentrouter.org API key** that was in `abc.json` | The file has been deleted, but the key was sitting in the project folder in plaintext. Deleting it does not un-leak it — issue a new key and revoke the old one. |
 | 2 | **Rotate the MessageCentral password and super admin password** | Both used the same value, committed in plaintext across `RAILWAY-ENV-TEMPLATE.txt`, `RAILWAY-DEPLOYMENT.md`, `RAILWAY-QUICK-START.md`, `README.md` and `seed.js`. All copies are scrubbed, but treat the value as compromised. |
-| 3 | **Set `CLOUDINARY_URL` in Railway** | Until then donation proofs land on Railway's ephemeral disk and are wiped on every redeploy. The code already falls back to disk, so nothing breaks — the images just do not survive. |
-| 4 | **Confirm the Railway Root Directory** | `sehri-app/src/` and `sehri-app/backend/src/` are byte-identical duplicates, each with its own `package.json`, `Procfile` and `railway.json`. Both are currently kept in sync by hand. Check Railway → Service → Settings → Root Directory and delete the copy that is not used. |
-| 5 | **Restrict the Google Maps API key** | The key in `app.json` is a client key and will ship inside the APK. Lock it to `com.sehriconnect.app` + your release SHA-1 in Google Cloud Console → Credentials. |
-| 6 | **`usesCleartextTraffic` is now `false`** | The app talks to Railway over HTTPS. If you ever point `mobile/src/constants/api.ts` at a plain `http://` dev server, flip this back to `true` in `app.json` or the requests will be blocked on Android. |
+| 3 | **Redeploy the backend** | The schema now tops itself up on boot (`src/database/ensureSchema.js`), creating `sync_state` and `profile_edit_requests.previous_values` automatically. A restart is enough — no manual `npm run migrate`. Until it restarts, Sync Data and Edit Requests will keep returning fetch errors. |
+| 4 | **Set `CLOUDINARY_URL` in Railway** | Until then donation proofs land on Railway's ephemeral disk and are wiped on every redeploy. The code already falls back to disk, so nothing breaks — the images just do not survive. |
+| 5 | **Confirm the Railway Root Directory** | `sehri-app/src/` and `sehri-app/backend/src/` are byte-identical duplicates, each with its own `package.json`, `Procfile` and `railway.json`. Both are currently kept in sync by hand. Check Railway → Service → Settings → Root Directory and delete the copy that is not used. |
+| 6 | **Restrict the Google Maps API key** | The key in `app.json` is a client key and will ship inside the APK. Lock it to `com.sehriconnect.app` + your release SHA-1 in Google Cloud Console → Credentials. |
+| 7 | **`usesCleartextTraffic` is now `false`** | The app talks to Railway over HTTPS. If you ever point `mobile/src/constants/api.ts` at a plain `http://` dev server, flip this back to `true` in `app.json` or the requests will be blocked on Android. |

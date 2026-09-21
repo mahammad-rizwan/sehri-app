@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const compression = require('compression');
 const cron = require('node-cron');
 const { connectDB } = require('./database/connection');
+const { ensureSchema } = require('./database/ensureSchema');
 const { generalLimiter } = require('./middleware/rateLimiter');
 const { error } = require('./utils/response');
 const logger = require('./utils/logger');
@@ -129,6 +130,9 @@ function schedulePrayerTimings() {
 
 const startServer = async () => {
   await connectDB();
+  // Additive schema top-up so a deploy never ships code that queries a column
+  // or table the database has not got yet.
+  await ensureSchema().catch((err) => logger.error('ensureSchema failed:', err.message));
   scheduleReminders();
   schedulePrayerTimings();
 

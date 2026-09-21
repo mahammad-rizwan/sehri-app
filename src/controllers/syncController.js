@@ -54,7 +54,14 @@ const getSyncStatus = async (req, res) => {
     });
   } catch (err) {
     logger.error('getSyncStatus error:', err);
-    return error(res, 'Failed to load sync status', 500);
+    const missingTable = /doesn't exist|no such table/i.test(err.message || '');
+    return error(
+      res,
+      missingTable
+        ? 'Sync table missing — restart the backend so it can create it, or run `npm run migrate`.'
+        : `Failed to load sync status: ${err.message}`,
+      500,
+    );
   }
 };
 

@@ -303,7 +303,14 @@ const getProfileEditRequests = async (req, res) => {
     return success(res, shaped);
   } catch (err) {
     logger.error('getProfileEditRequests error:', err);
-    return error(res, 'Failed to fetch requests', 500);
+    const missingCol = /unknown column|doesn't exist|no such column/i.test(err.message || '');
+    return error(
+      res,
+      missingCol
+        ? 'Edit request table is out of date — restart the backend so it can update itself, or run `npm run migrate`.'
+        : `Failed to fetch requests: ${err.message}`,
+      500,
+    );
   }
 };
 
