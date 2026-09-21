@@ -43,7 +43,7 @@ One Message is a Ramzan/Sehri food distribution coordination app for Muslim stud
 | Push notifications | expo-notifications |
 | Arabic font | IndopakNastaleeq.ttf |
 | Quran data | api.quran.com/api/v4 |
-| Maps | Google Maps JS API via WebView |
+| Maps | `react-native-maps` 1.20.1 — native Google Maps Android SDK |
 | Architecture | New Architecture enabled (`newArchEnabled: true`) |
 
 ---
@@ -79,7 +79,16 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 - Location cascade: Bangalore Area → Locality (Kengeri etc.) → College (RV College etc.) → Zone → PG/Address (30+ known PGs listed per zone)
 - New users start as `pending` — a zone admin must approve them
 - Forgot password: OTP verify → new password (users only; admins contact super admin)
-- Profile edit requests require admin approval
+- **Editing a pending registration does not ask for OTP again.** The phone number
+  is unchanged and was already verified, so a second SMS proves nothing. Instead
+  the backend issues a short-lived (30 min) *edit token*:
+  - on a pending login — the password was already checked before the 403
+  - right after registering — the OTP was just verified
+  The token is signed with a secret derived from `JWT_SECRET`, so it cannot be
+  replayed as an access or refresh token anywhere else in the API. `PATCH
+  /auth/pending-registration` refuses it once the account leaves `pending`, and
+  phone number and status are not editable through it.
+- Profile edit requests (after approval) still require admin approval
 - Pending approval overlay shows zone admin contact number
 
 ### 2. Daily Sehri Poll *(Core Feature)*
@@ -95,6 +104,27 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 - Push notifications fire on poll open, poll close, and scheduled reminders
 
 ### 3. Live Delivery Tracking
+
+The map is **`react-native-maps`** (native Google Maps Android SDK), not a
+WebView running the Maps JavaScript SDK. Native map loads are not a billed
+Google SKU, there is no browser engine to boot, and markers are ordinary React
+components — no injected JS or `postMessage` bridge.
+
+- `src/components/map/DeliveryMap.tsx` — the shared map, used by the user
+  tracking screen and the rider's preview of it.
+- `src/constants/mapData.ts` — coordinates, dark map style, zone colours,
+  legend, and the clustering helpers.
+- The Android key comes from `app.json` → `android.config.googleMaps.apiKey`
+  (which was previously dead config, since only the WebView copy was in use).
+- Google Maps on **both** platforms, so the dark style and zone colours match.
+  Keys: `android.config.googleMaps.apiKey` and `ios.config.googleMapsApiKey`.
+- Girls-zone drop points are clustered by on-screen distance at the current
+  zoom — 27 points collapse to ~17 markers at zoom 15 and separate fully as you
+  zoom in. A fixed lat/lng grid does not work for this data, which ranges from
+  ~5m to ~110m apart.
+- Polling is gated on screen focus, and the camera follows the rider until the
+  user pans away, at which point a "Recentre on rider" pill appears.
+
 - Super admin creates rider accounts (name, phone, password, zone)
 - Riders log in on a separate screen with phone + password
 - Rider's phone pushes GPS every 20 seconds via a background foreground service
@@ -136,6 +166,23 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 - Daily supplications browsable by category
 - Bookmarks
 
+### 9a. Profile Changes (after approval)
+
+- The profile screen has **Request Profile Edit** (name, gender, occupation, zone, address).
+  Only fields that actually changed are sent.
+- Submitting sets the account back to `pending`, notifies the zone admin **and** every
+  super admin, then warns the user and signs them out.
+- Reviewers see each change as `old → new` with a **CHANGED** tag, under
+  Dashboard → Edit Requests (badge shows the queue size).
+- Approve applies the changes; reject keeps the old values. **Either outcome
+  restores `status: 'approved'`**, so the user can always log back in.
+- While a request is queued the user cannot use the pending-registration edit
+  token — that would sidestep the review. Login shows "Changes Under Review"
+  with no edit shortcut.
+- **Change Password** is separate and needs no approval and no OTP — the current
+  password is the confirmation. Riders are excluded (they authenticate against
+  `tracking.rider_password`).
+
 ### 9. Feedback
 - Users submit with category (food_quality/distribution/suggestion/complaint/general) + optional 1–5 star rating
 - Admins see all feedback, mark read/unread
@@ -147,13 +194,14 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 
 ---
 
-## All API Endpoints (72 total)
+## All API Endpoints (74 total)
 
 ### Auth `/api/auth`
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | POST | `/send-otp` | Public | Send registration OTP |
 | POST | `/register` | Public | Register user (OTP + password) |
+| PATCH | `/pending-registration` | Edit token | Edit a pending registration — **no OTP** |
 | POST | `/login` | Public | Role-based login |
 | POST | `/forgot-password/send-otp` | Public | Send reset OTP |
 | POST | `/forgot-password/verify-otp` | Public | Verify OTP |
@@ -175,7 +223,8 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 | GET | `/` | admin/super_admin | List users (admin: own zone) |
 | PATCH | `/:id/status` | admin/super_admin | Approve/reject user |
 | DELETE | `/:id` | admin/super_admin | Delete user |
-| POST | `/request-profile-edit` | user | Request profile change |
+| POST | `/request-profile-edit` | user | Request profile change — sets account back to `pending` |
+| POST | `/change-password` | user/admin/super_admin | Change own password — no approval, no OTP |
 | GET | `/profile-edit-requests` | admin/super_admin | List pending edit requests |
 | PATCH | `/profile-edit-requests/:id` | admin/super_admin | Approve/reject edit |
 
@@ -549,6 +598,35 @@ eas build --platform android --profile production
 | `CLOUDINARY_URL` | `cloudinary://key:secret@cloud` — donation proof storage |
 | `FRONTEND_URL` | CORS / Socket.IO origin in production |
 | `SUPER_ADMIN_PHONE / NAME / PASSWORD` | Super admin seed credentials — **required**, seeding now fails without them |
+
+---
+
+## iOS Support
+
+The app ships for **both Android and iOS**. What that required:
+
+| Item | Detail |
+|---|---|
+| `eas.json` | Every profile was Android-only — an iOS build was impossible. All profiles now declare `ios`, plus a `preview-simulator` profile. |
+| Maps key | `ios.config.googleMapsApiKey` added; resolves to `GMSApiKey` in Info.plist. Without it `PROVIDER_GOOGLE` renders a blank map. |
+| Background location | `UIBackgroundModes: ['location']` added. Without it iOS kills the rider's location updates the moment the app is backgrounded — the tracking feature silently dies. |
+| Location strings | `NSLocationAlwaysAndWhenInUseUsageDescription` added. `NSLocationAlwaysUsageDescription` alone is iOS 10 and earlier; iOS 11+ ignores it. |
+| Rider tracking | `activityType: AutomotiveNavigation` stops Core Location throttling updates. `foregroundService` stays for Android and is ignored on iOS. |
+| Export compliance | `ITSAppUsesNonExemptEncryption: false` — skips the question on every TestFlight upload. |
+| Camera | `expo-image-picker` was auto-declaring `NSCameraUsageDescription`, but only the photo library is used. Disabled via `cameraPermission: false`. |
+| App icons | Verified alpha-free (`assets/icon.png` is RGB, no alpha) — Apple rejects icons with an alpha channel. |
+
+### Still needed from you for iOS
+
+1. **Apple Developer Program membership** ($99/yr) — required to build or ship.
+2. **Fill in `eas.json` → `submit.production.ios`**: `appleId`, `ascAppId`, `appleTeamId`.
+3. **APNs key** for push — `eas credentials -p ios` and let EAS create/upload a
+   push key. `google-services.json` is Android-only and does nothing for iOS.
+4. **A separate iOS Maps key.** `ios.config.googleMapsApiKey` currently reuses
+   the Android value, which only works while that key is unrestricted. Create a
+   second key restricted to the iOS bundle ID `com.sehriconnect.app`, enable
+   **Maps SDK for iOS** on it, and restrict the Android key to the package name
+   + SHA-1. One key cannot be restricted to both platforms.
 
 ---
 

@@ -22,9 +22,27 @@ export interface User {
   hasSuperAdminRole?: boolean;
 }
 
+export interface PendingEditData {
+  name?: string;
+  gender?: string;
+  occupation?: string;
+  city?: string;
+  area?: string;
+  zone?: string;
+  address?: string;
+  /** Only sent when the user actually wants to change it. */
+  password?: string;
+}
+
 interface AuthState {
   user: User | null;
   userRole: 'user' | 'admin' | 'super_admin' | null;
+  /**
+   * Short-lived token that authorises editing a pending registration without
+   * a second OTP. Issued on a pending login (password already checked) and
+   * after a successful registration (OTP already checked).
+   */
+  pendingEditToken: string | null;
   /** The current active mode (may differ from userRole after switching) */
   activeRole: 'user' | 'admin' | 'super_admin' | null;
   isAuthenticated: boolean;
@@ -34,6 +52,10 @@ interface AuthState {
   sendOTP: (phone: string, purpose: string) => Promise<any>;
   login: (phone: string, password: string, role: string) => Promise<User>;
   register: (data: RegisterData) => Promise<any>;
+  setPendingEditToken: (token: string | null) => void;
+  requestProfileEdit: (changes: PendingEditData) => Promise<any>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<any>;
+  updatePendingRegistration: (data: PendingEditData) => Promise<any>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   switchRole: (targetRole: 'user' | 'admin' | 'super_admin') => Promise<User>;
@@ -66,6 +88,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   userRole: null,
   activeRole: null,
+  pendingEditToken: null,
   isAuthenticated: false,
   isLoading: true,
 
@@ -117,6 +140,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   register: async (registerData: RegisterData) => {
     const { data } = await api.post(ENDPOINTS.REGISTER, registerData, OTP_TIMEOUT_MS);
+    if (data?.data?.editToken) set({ pendingEditToken: data.data.editToken });
+    return data;
+  },
+
+  setPendingEditToken: (token) => set({ pendingEditToken: token }),
+
+  /**
+   * Ask an admin to approve profile changes. The backend flips the account back
+   * to `pending`, so the caller must sign the user out afterwards.
+   */
+  requestProfileEdit: async (changes: PendingEditData) => {
+    const { data } = await api.post(ENDPOINTS.REQUEST_PROFILE_EDIT, changes);
+    return data;
+  },
+
+  /** Self-service, no approval and no OTP — the current password is the proof. */
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const { data } = await api.post(ENDPOINTS.CHANGE_PASSWORD, { currentPassword, newPassword });
+    return data;
+  },
+
+  /**
+   * Edit a still-pending registration. No OTP — the phone number is unchanged
+   * and was already verified, and the edit token proves who is asking.
+   */
+  updatePendingRegistration: async (payload: PendingEditData) => {
+    const token = get().pendingEditToken;
+    if (!token) throw new Error('NO_EDIT_TOKEN');
+    const { data } = await api.patch(ENDPOINTS.UPDATE_PENDING_REGISTRATION, payload, token);
+    if (data?.data?.editToken) set({ pendingEditToken: data.data.editToken });
     return data;
   },
 
@@ -124,7 +177,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await api.clearTokens();
     await SecureStore.deleteItemAsync('userRole');
     await SecureStore.deleteItemAsync('activeRole');
-    set({ user: null, userRole: null, activeRole: null, isAuthenticated: false });
+    set({ user: null, userRole: null, activeRole: null, pendingEditToken: null, isAuthenticated: false });
   },
 
   refreshProfile: async () => {

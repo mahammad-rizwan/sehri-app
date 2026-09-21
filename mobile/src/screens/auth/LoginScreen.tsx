@@ -28,10 +28,12 @@ export default function LoginScreen() {
   const [forgotVisible, setForgotVisible] = useState(false);
   const [pendingInfo, setPendingInfo] = useState<{
     phone: string; zone: string; name: string; address?: string;
-    gender?: string; occupation?: string; area?: string
+    gender?: string; occupation?: string; area?: string;
+    /** 'registration' = never approved yet, 'profile_edit' = changes under review */
+    reason?: 'registration' | 'profile_edit';
   } | null>(null);
   const router = useRouter();
-  const { login } = useAuthStore();
+  const { login, setPendingEditToken } = useAuthStore();
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const headerSlide = useRef(new Animated.Value(40)).current;
@@ -91,9 +93,13 @@ export default function LoginScreen() {
       const httpStatus = err?.response?.status;
       const extras = err?.response?.data?.errors;
       if (httpStatus === 403 && extras?.status === 'pending') {
+        // The password was accepted before this 403, so the backend hands back
+        // an edit token — that is what lets the edit flow skip a second OTP.
+        setPendingEditToken(extras.editToken || null);
         setPendingInfo({
           phone: extras.phone || phone, zone: extras.zone || '', name: extras.name || '',
           address: extras.address, gender: extras.gender, occupation: extras.occupation, area: extras.area,
+          reason: extras.reason === 'profile_edit' ? 'profile_edit' : 'registration',
         });
         return;
       }
@@ -204,7 +210,7 @@ export default function LoginScreen() {
 
       {pendingInfo && (
         <PendingApprovalOverlay
-          name={pendingInfo.name} zone={pendingInfo.zone}
+          name={pendingInfo.name} zone={pendingInfo.zone} reason={pendingInfo.reason}
           onEdit={() => {
             const p = pendingInfo;
             setPendingInfo(null);
@@ -509,7 +515,8 @@ const ZONE_CONTACTS_DATA = [
   { key: 'girls', label: 'Girls Zone', emoji: '🌸', color: COLORS.zonesGirls, phone: '9876543201' },
 ];
 
-function PendingApprovalOverlay({ name, zone, onEdit, onDismiss }: { name: string; zone: string; onEdit: () => void; onDismiss: () => void }) {
+function PendingApprovalOverlay({ name, zone, reason, onEdit, onDismiss }: { name: string; zone: string; reason?: 'registration' | 'profile_edit'; onEdit: () => void; onDismiss: () => void }) {
+  const underReview = reason === 'profile_edit';
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onDismiss}>
       <View style={pa.overlay}>
@@ -520,11 +527,13 @@ function PendingApprovalOverlay({ name, zone, onEdit, onDismiss }: { name: strin
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={pa.body} showsVerticalScrollIndicator={false}>
-            <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 12 }}>⏳</Text>
-            <Text style={pa.title}>Account Pending Approval</Text>
+            <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 12 }}>{underReview ? '📝' : '⏳'}</Text>
+            <Text style={pa.title}>{underReview ? 'Changes Under Review' : 'Account Pending Approval'}</Text>
             {name ? <Text style={pa.name}>Hello, {name}! 🙌</Text> : null}
             <Text style={pa.subtitle}>
-              Your registration is complete. Your account is waiting for approval from your zone admin.
+              {underReview
+                ? 'Your profile changes were submitted and are waiting for your zone admin or the super admin to approve them. You can log in again as soon as they do.'
+                : 'Your registration is complete. Your account is waiting for approval from your zone admin.'}
             </Text>
 
             <View style={pa.contactsCard}>
@@ -541,10 +550,12 @@ function PendingApprovalOverlay({ name, zone, onEdit, onDismiss }: { name: strin
               ))}
             </View>
 
-            <TouchableOpacity style={pa.editBtn} onPress={onEdit} activeOpacity={0.8}>
-              <Ionicons name="create-outline" size={15} color={COLORS.primary} />
-              <Text style={pa.editBtnText}>✏️ Edit My Details Before Approval</Text>
-            </TouchableOpacity>
+            {!underReview && (
+              <TouchableOpacity style={pa.editBtn} onPress={onEdit} activeOpacity={0.8}>
+                <Ionicons name="create-outline" size={15} color={COLORS.primary} />
+                <Text style={pa.editBtnText}>✏️ Edit My Details Before Approval</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity style={pa.backBtn} onPress={onDismiss} activeOpacity={0.7}>
               <Text style={pa.backBtnText}>🔙 Back to Login</Text>

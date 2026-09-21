@@ -1,4 +1,5 @@
 const { User, Admin, SuperAdmin, ProfileEditRequest } = require('../models');
+const { notifyReviewers, notifyOne } = require('../services/expoPushService');
 const { success, error, paginated } = require('../utils/response');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
@@ -41,20 +42,23 @@ const getMe = async (req, res) => {
  */
 const requestProfileEdit = async (req, res) => {
   try {
-    const allowedFields = ['name', 'gender', 'zone', 'address'];
+    const allowedFields = ['name', 'gender', 'zone', 'address', 'occupation', 'area'];
     const changes = {};
+    const previous = {};
 
     allowedFields.forEach((field) => {
-      if (req.body[field] !== undefined) {
-        changes[field] = req.body[field];
-      }
+      if (req.body[field] === undefined) return;
+      const next = typeof req.body[field] === 'string' ? req.body[field].trim() : req.body[field];
+      // Ignore no-op fields so reviewers only ever see genuine changes.
+      if (next === req.user[field]) return;
+      changes[field] = next;
+      previous[field] = req.user[field] ?? null;
     });
 
     if (Object.keys(changes).length === 0) {
-      return error(res, 'No valid fields to update', 400);
+      return error(res, 'Nothing has changed', 400);
     }
 
-    // Check if there's already a pending request
     const pending = await ProfileEditRequest.findOne({
       where: { user_id: req.user.id, status: 'pending' },
     });
@@ -65,9 +69,30 @@ const requestProfileEdit = async (req, res) => {
     const editRequest = await ProfileEditRequest.create({
       user_id: req.user.id,
       requested_changes: changes,
+      previous_values: previous,
     });
 
-    return success(res, { requestId: editRequest.id }, 'Profile edit request submitted. Pending admin approval.', 201);
+    // The profile is under review, so the account goes back to pending and the
+    // app signs the user out. They get back in once a reviewer approves.
+    await req.user.update({ status: 'pending' });
+
+    // Route to the admin of the zone they are currently in (not the requested
+    // one) plus every super admin.
+    notifyReviewers(
+      req.user.zone,
+      '📝 Profile Edit Request',
+      `${req.user.name} requested changes to ${Object.keys(changes).join(', ')}.`,
+      { screen: 'profile-edit-requests' },
+    ).catch((e) => logger.warn('notifyReviewers failed:', e.message));
+
+    logger.info(`Profile edit requested by ${req.user.phone}: ${Object.keys(changes).join(', ')}`);
+
+    return success(res, {
+      requestId: editRequest.id,
+      changedFields: Object.keys(changes),
+      // Tells the app to warn and then sign out.
+      requiresLogout: true,
+    }, 'Edit request submitted. Your account is pending approval again — you will be signed out.', 201);
   } catch (err) {
     logger.error('requestProfileEdit error:', err);
     return error(res, 'Failed to submit edit request', 500);
@@ -207,6 +232,41 @@ const promoteToAdmin = async (req, res) => {
 };
 
 /**
+ * POST /users/change-password
+ * Self-service password change for the signed-in account. No approval, no OTP —
+ * knowing the current password is the proof, and the phone number is unchanged.
+ * Works for users, admins and super admins alike.
+ */
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return error(res, 'Current and new password are both required', 400);
+    }
+    if (currentPassword === newPassword) {
+      return error(res, 'Your new password must be different from your current one', 400);
+    }
+    if (!req.user.password) {
+      return error(res, 'No password set for this account. Please contact support.', 400);
+    }
+
+    const ok = await bcrypt.compare(currentPassword, req.user.password);
+    if (!ok) return error(res, 'Your current password is incorrect', 401);
+
+    const salt = await bcrypt.genSalt(10);
+    await req.user.update({ password: await bcrypt.hash(newPassword, salt) });
+
+    logger.info(`Password changed by ${req.userRole} ${req.user.phone}`);
+
+    return success(res, {}, 'Password changed successfully');
+  } catch (err) {
+    logger.error('changePassword error:', err);
+    return error(res, 'Failed to change password', 500);
+  }
+};
+
+/**
  * GET /users/profile-edit-requests (Admin)
  */
 const getProfileEditRequests = async (req, res) => {
@@ -216,10 +276,31 @@ const getProfileEditRequests = async (req, res) => {
 
     const requests = await ProfileEditRequest.findAll({
       where: requestsWhere,
-      include: [{ model: User, attributes: ['id', 'name', 'phone', 'zone'], where: userWhere }],
+      include: [{ model: User, attributes: ['id', 'name', 'phone', 'zone', 'address', 'gender', 'occupation', 'area', 'status'], where: userWhere }],
       order: [['created_at', 'ASC']],
     });
-    return success(res, requests);
+
+    // Pre-compute the diff so every client renders the same "changed" tags.
+    const shaped = requests.map((r) => {
+      const changes = r.requested_changes || {};
+      const previous = r.previous_values || {};
+      return {
+        id: r.id,
+        user: r.User,
+        status: r.status,
+        created_at: r.createdAt,
+        requested_changes: changes,
+        previous_values: previous,
+        // [{ field, from, to }] — drives the CHANGED tag in the admin UI.
+        diff: Object.keys(changes).map((field) => ({
+          field,
+          from: previous[field] ?? (r.User ? r.User[field] : null) ?? null,
+          to: changes[field],
+        })),
+      };
+    });
+
+    return success(res, shaped);
   } catch (err) {
     logger.error('getProfileEditRequests error:', err);
     return error(res, 'Failed to fetch requests', 500);
@@ -249,9 +330,23 @@ const reviewProfileEditRequest = async (req, res) => {
 
     await request.update({ status, reviewed_by: req.user.id, rejection_reason });
 
+    // Submitting the request pushed the account to `pending`. Either outcome
+    // has to lift that again, otherwise the user can never log back in.
     if (status === 'approved') {
-      await request.User.update(request.requested_changes);
+      await request.User.update({ ...request.requested_changes, status: 'approved' });
+    } else {
+      await request.User.update({ status: 'approved' });
     }
+
+    notifyOne(
+      request.User.fcm_token,
+      status === 'approved' ? '✅ Profile Changes Approved' : '❌ Profile Changes Rejected',
+      status === 'approved'
+        ? 'Your profile changes were approved. You can log in again.'
+        : `Your profile changes were not approved${rejection_reason ? `: ${rejection_reason}` : ''}. Your previous details are unchanged and you can log in again.`,
+    ).catch((e) => logger.warn('notifyOne failed:', e.message));
+
+    logger.info(`Profile edit request ${id} ${status} by ${req.userRole} ${req.user.id}`);
 
     return success(res, {}, `Profile edit request ${status}`);
   } catch (err) {
@@ -311,6 +406,7 @@ const deleteMyAccount = async (req, res) => {
 module.exports = {
   getMe,
   requestProfileEdit,
+  changePassword,
   listUsers,
   updateUserStatus,
   deleteUser,

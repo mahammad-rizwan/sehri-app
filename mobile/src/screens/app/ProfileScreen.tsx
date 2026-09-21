@@ -13,11 +13,14 @@ import PremiumCard from '../../components/ui/PremiumCard';
 import { GoldenDivider } from '../../components/ui/IslamicPattern';
 import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
+import { EditProfileRequestModal, ChangePasswordModal } from '../../components/profile/ProfileModals';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [showEdit, setShowEdit] = useState(false);
+  const [showPassword, setShowPasswordModal] = useState(false);
   const [zoneAdmin, setZoneAdmin] = useState<{ name: string; phone: string } | null>(null);
 
   useEffect(() => {
@@ -146,6 +149,25 @@ export default function ProfileScreen() {
           <Text style={styles.quoteSource}>— Prophet Muhammad ﷺ</Text>
         </LinearGradient>
 
+        {/* Request profile changes — needs admin approval */}
+        <GoldButton
+          title="Request Profile Edit ✏️"
+          onPress={() => setShowEdit(true)}
+          style={{ marginTop: 4 }}
+        />
+        <Text style={styles.actionHint}>
+          Changes need your zone admin's approval. You'll be signed out until they review it.
+        </Text>
+
+        {/* Change password — instant, no approval */}
+        <GoldButton
+          title="Change Password 🔒"
+          onPress={() => setShowPasswordModal(true)}
+          variant="outline"
+          style={{ marginTop: 12 }}
+        />
+        <Text style={styles.actionHint}>Takes effect immediately — no approval needed.</Text>
+
         {/* Delete Account */}
         <GoldButton
           title="Delete Account 🗑️"
@@ -187,12 +209,33 @@ export default function ProfileScreen() {
           textStyle={{ color: COLORS.textSecondary }}
         />
       </ScrollView>
+
+      <EditProfileRequestModal
+        visible={showEdit}
+        user={user}
+        onClose={() => setShowEdit(false)}
+        onSubmitted={async () => {
+          setShowEdit(false);
+          await logout();
+          router.replace('/(auth)/login');
+        }}
+      />
+
+      <ChangePasswordModal visible={showPassword} onClose={() => setShowPasswordModal(false)} />
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  actionHint: {
+    color: COLORS.textMuted,
+    fontSize: 11.5,
+    lineHeight: 17,
+    textAlign: 'center',
+    marginTop: 6,
+    paddingHorizontal: 12,
+  },
   topBar: {
     justifyContent: 'flex-end',
     borderBottomWidth: StyleSheet.hairlineWidth,

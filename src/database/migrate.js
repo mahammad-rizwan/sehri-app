@@ -73,6 +73,21 @@ const migrate = async () => {
       } else throw err;
     }
 
+    // 4b. Snapshot column for profile edit requests (before -> after display)
+    try {
+      await queryInterface.addColumn('profile_edit_requests', 'previous_values', {
+        type: require('sequelize').DataTypes.JSON,
+        allowNull: true,
+      });
+      logger.info('✅ Added previous_values column to profile_edit_requests');
+    } catch (err) {
+      if (err.name === 'SequelizeDatabaseError' && (err.parent?.code === 'ER_DUP_FIELDNAME' || err.parent?.code === 'ER_DUP_FIELD_NAME')) {
+        logger.info('ℹ️ previous_values column already exists');
+      } else if (err.parent?.code === 'ER_NO_SUCH_TABLE') {
+        logger.info('ℹ️ profile_edit_requests table not created yet — sync will handle it');
+      } else throw err;
+    }
+
     // 5. Update zone ENUM for users - MySQL can't alter ENUM directly in Sequelize easily
     try {
       await sequelize.query(

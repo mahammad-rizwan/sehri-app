@@ -1,16 +1,16 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Platform,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, SIZES } from '../../constants/theme';
 import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
-import { buildMapHtml, NO_RIDER_HTML } from '../../utils/mapHtml';
+import DeliveryMap from '../../components/map/DeliveryMap';
+import { MAP_LEGEND } from '../../constants/mapData';
 
 const POLL_MS   = 20000;
 
@@ -24,11 +24,7 @@ export default function TrackingScreen() {
   const [riders, setRiders]          = useState<any[]>([]);
   const [loading, setLoading]        = useState(true);
   const [selectedRider, setSelected] = useState<any>(null);
-  const [mapReady, setMapReady]      = useState(false);
-  const [mapError, setMapError]      = useState(false);
 
-  const webviewRef  = useRef<WebView>(null);
-  const prevCoords  = useRef<{ lat: number; lng: number } | null>(null);
 
   // ── Hidden rider login: 5 taps ────────────────────────────────
   const riderTaps  = useRef(0);
@@ -61,31 +57,24 @@ export default function TrackingScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-    const iv = setInterval(load, POLL_MS);
-    return () => clearInterval(iv);
-  }, [load]);
+  // Polling every 20s in the background burned data and battery for a screen
+  // nobody was looking at. Tie it to focus instead.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+      const iv = setInterval(load, POLL_MS);
+      return () => clearInterval(iv);
+    }, [load]),
+  );
 
   const rider = selectedRider;
   const lat   = rider?.latitude  ? parseFloat(rider.latitude)  : DEFAULT_LAT;
   const lng   = rider?.longitude ? parseFloat(rider.longitude) : DEFAULT_LNG;
 
-  // ── Inject JS to move pin without reloading ─────────────────
-  useEffect(() => {
-    if (!mapReady || !rider?.latitude || !rider?.longitude) return;
-    const prev = prevCoords.current;
-    if (prev && prev.lat === lat && prev.lng === lng) return;
-    prevCoords.current = { lat, lng };
-    webviewRef.current?.injectJavaScript(`
-      if (typeof updatePin === 'function') { updatePin(${lat}, ${lng}); }
-      true;
-    `);
-  }, [rider?.latitude, rider?.longitude, mapReady]);
-
-  const mapHtml = rider
-    ? buildMapHtml(lat, lng)
-    : NO_RIDER_HTML;
+  // Native marker — just pass the coordinate down, no bridge plumbing.
+  const riderCoord = rider?.latitude && rider?.longitude
+    ? { latitude: lat, longitude: lng }
+    : null;
 
   return (
     <View style={st.root}>
@@ -105,35 +94,21 @@ export default function TrackingScreen() {
 
       {/* ══  MAP  ══ */}
       <View style={st.mapArea}>
-        <WebView
-          ref={webviewRef}
-          key={rider?.id ?? 'no-rider'}
-          source={{ html: mapHtml }}
-          style={st.webview}
-          javaScriptEnabled
-          domStorageEnabled
-          originWhitelist={['*']}
-          mixedContentMode="always"
-          onLoadEnd={() => { setMapReady(true); setMapError(false); prevCoords.current = null; }}
-          onError={() => { setMapReady(false); setMapError(true); }}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={st.loader}>
-              <Text style={{ fontSize: 32 }}>🌙</Text>
-              <Text style={st.loaderTxt}>Loading map…</Text>
-            </View>
-          )}
-        />
-        {mapError && (
-          <View style={st.mapError}>
-            <Text style={{ fontSize: 40 }}>🗺️</Text>
-            <Text style={st.mapErrorTitle}>Map unavailable</Text>
-            <Text style={st.mapErrorSub}>Check your internet connection.{'\n'}Google Maps may need an unrestricted API key.</Text>
+        <DeliveryMap rider={riderCoord} />
+
+        {/* Riders show on the map; this covers the "nobody is out yet" case. */}
+        {!riderCoord && !loading && (
+          <View pointerEvents="none" style={st.noRider}>
+            <Text style={{ fontSize: 40 }}>🛵</Text>
+            <Text style={st.noRiderTitle}>No active delivery</Text>
+            <Text style={st.noRiderSub}>
+              The live pin appears here once a rider starts their round.
+            </Text>
           </View>
         )}
       </View>
 
-      {/* ══  BOTTOM — minimal status  ══ */}
+      {/* ══  BOTTOM — status + what the pin colours mean  ══ */}
       <View style={st.sheet}>
         <Text style={st.statusTxt}>
           {loading ? 'Loading…'
@@ -141,12 +116,39 @@ export default function TrackingScreen() {
               ? '🛵 Delivery in progress'
               : '⏳ Waiting for delivery'}
         </Text>
+
+        <View style={st.legend}>
+          {MAP_LEGEND.map((l) => (
+            <View key={l.key} style={st.legendItem}>
+              <View style={[st.legendDot, { backgroundColor: l.color }]} />
+              <Text style={st.legendTxt}>{l.label}</Text>
+            </View>
+          ))}
+        </View>
       </View>
     </View>
   );
 }
 
 const st = StyleSheet.create({
+  noRider: {
+    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(5,13,22,0.82)', gap: 8, paddingHorizontal: 32,
+  },
+  noRiderTitle: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
+  noRiderSub: { color: COLORS.textMuted, fontSize: 12.5, textAlign: 'center', lineHeight: 19 },
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 10,
+    paddingHorizontal: 4,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.65)' },
+  legendTxt: { color: COLORS.textMuted, fontSize: 10.5 },
   root:    { flex: 1, backgroundColor: '#050D16' },
 
   topBar: {

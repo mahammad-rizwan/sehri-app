@@ -3,16 +3,15 @@
  * Accessible from the Broadcast screen via "View Live Map" button.
  * Has a back button to return to broadcasting.
  */
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { WebView } from 'react-native-webview';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { COLORS, SIZES } from '../../src/constants/theme';
 import api from '../../src/services/api';
 import { ENDPOINTS } from '../../src/constants/api';
-import { buildMapHtml, NO_RIDER_HTML } from '../../src/utils/mapHtml';
+import DeliveryMap from '../../src/components/map/DeliveryMap';
 
 const POLL_MS    = 20000;
 const DEFAULT_LAT = 12.9141;
@@ -22,11 +21,7 @@ export default function RiderMapScreen() {
   const router = useRouter();
   const [riders, setRiders]          = useState<any[]>([]);
   const [loading, setLoading]        = useState(true);
-  const [mapReady, setMapReady]      = useState(false);
-  const [mapError, setMapError]      = useState(false);
   const [selectedRider, setSelected] = useState<any>(null);
-  const webviewRef  = useRef<WebView>(null);
-  const prevCoords  = useRef<{ lat: number; lng: number } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -44,68 +39,31 @@ export default function RiderMapScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-    const iv = setInterval(load, POLL_MS);
-    return () => clearInterval(iv);
-  }, [load]);
+  // Only poll while this screen is on top.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+      const iv = setInterval(load, POLL_MS);
+      return () => clearInterval(iv);
+    }, [load]),
+  );
 
-  // Inject JS to move pin on coord update — no map reload
-  useEffect(() => {
-    if (!mapReady || !selectedRider) return;
-    const lat = selectedRider.latitude  ? parseFloat(selectedRider.latitude)  : null;
-    const lng = selectedRider.longitude ? parseFloat(selectedRider.longitude) : null;
-    if (!lat || !lng) return;
-    const prev = prevCoords.current;
-    if (prev && prev.lat === lat && prev.lng === lng) return;
-    prevCoords.current = { lat, lng };
-    webviewRef.current?.injectJavaScript(
-      `if(typeof updatePin==='function'){updatePin(${lat},${lng});}true;`
-    );
-  }, [selectedRider?.latitude, selectedRider?.longitude, mapReady]);
-
-  const rider   = selectedRider;
-  const lat     = rider?.latitude  ? parseFloat(rider.latitude)  : DEFAULT_LAT;
-  const lng     = rider?.longitude ? parseFloat(rider.longitude) : DEFAULT_LNG;
-  const mapHtml = rider
-    ? buildMapHtml(lat, lng)
-    : NO_RIDER_HTML;
+  const rider = selectedRider;
+  const riderCoord = rider?.latitude && rider?.longitude
+    ? { latitude: parseFloat(rider.latitude), longitude: parseFloat(rider.longitude) }
+    : null;
 
   return (
     <View style={st.root}>
       {/* Map */}
       <View style={st.mapArea}>
-        <WebView
-          ref={webviewRef}
-          key={rider?.id ?? 'no-rider'}
-          source={{ html: mapHtml }}
-          style={st.webview}
-          javaScriptEnabled
-          domStorageEnabled
-          originWhitelist={['*']}
-          mixedContentMode="always"
-          allowFileAccessFromFileURLs
-          allowUniversalAccessFromFileURLs
-          setSupportMultipleWindows={false}
-          androidLayerType="hardware"
-          geolocationEnabled={false}
-          cacheEnabled={false}
-          onLoadEnd={() => { setMapReady(true); setMapError(false); }}
-          onError={() => { setMapReady(false); setMapError(true); }}
-          onHttpError={() => { setMapReady(false); setMapError(true); }}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={st.loader}>
-              <Text style={{ fontSize: 28 }}>🌙</Text>
-              <Text style={st.loaderTxt}>Loading map…</Text>
-            </View>
-          )}
-        />
-        {mapError && (
-          <View style={st.mapError}>
-            <Text style={{ fontSize: 40 }}>🗺️</Text>
-            <Text style={st.mapErrorTitle}>Map unavailable</Text>
-            <Text style={st.mapErrorSub}>Check your internet connection.{'\n'}Google Maps may need an unrestricted API key.</Text>
+        <DeliveryMap rider={riderCoord} />
+
+        {!riderCoord && (
+          <View pointerEvents="none" style={st.noRider}>
+            <Text style={{ fontSize: 36 }}>🛵</Text>
+            <Text style={st.noRiderTitle}>No active delivery</Text>
+            <Text style={st.noRiderSub}>Start broadcasting to appear on the map.</Text>
           </View>
         )}
       </View>
@@ -127,6 +85,13 @@ export default function RiderMapScreen() {
 }
 
 const st = StyleSheet.create({
+  noRider: {
+    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(5,13,22,0.82)', gap: 8, paddingHorizontal: 32,
+  },
+  noRiderTitle: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
+  noRiderSub: { color: COLORS.textMuted, fontSize: 12.5, textAlign: 'center', lineHeight: 19 },
   root:    { flex: 1, backgroundColor: '#050D16' },
   mapArea: { flex: 1 },
   webview: { flex: 1, backgroundColor: '#0d1b2a' },

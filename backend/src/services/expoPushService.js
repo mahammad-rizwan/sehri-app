@@ -77,4 +77,32 @@ async function notifyAllUsers(title, body) {
   await Promise.allSettled(tokens.map((token) => sendPushNotification(token, title, body)));
 }
 
-module.exports = { sendPushNotification, sendPollEnabledNotification, sendPollDisabledNotification, notifyAllUsers };
+/**
+ * Notify the admin(s) responsible for a zone plus every super admin.
+ * Used when something needs review — e.g. a profile edit request.
+ */
+async function notifyReviewers(zone, title, body, data = {}) {
+  const [admins, superAdmins] = await Promise.all([
+    Admin.findAll({ attributes: ['fcm_token'], where: { zone, fcm_token: { [Op.ne]: null } } }),
+    SuperAdmin.findAll({ attributes: ['fcm_token'], where: { fcm_token: { [Op.ne]: null } } }),
+  ]);
+
+  const tokens = [...new Set([
+    ...admins.map((a) => a.fcm_token),
+    ...superAdmins.map((sa) => sa.fcm_token),
+  ].filter(Boolean))];
+
+  logger.info(`Notifying ${tokens.length} reviewer device(s) for zone ${zone}`);
+  await Promise.allSettled(tokens.map((t) => sendPushNotification(t, title, body, data)));
+}
+
+/** Notify one specific account (any role) by its stored Expo token. */
+async function notifyOne(fcmToken, title, body, data = {}) {
+  if (!fcmToken) return;
+  await sendPushNotification(fcmToken, title, body, data);
+}
+
+module.exports = {
+  sendPushNotification, sendPollEnabledNotification, sendPollDisabledNotification,
+  notifyAllUsers, notifyReviewers, notifyOne,
+};

@@ -21,6 +21,7 @@ export const ENDPOINTS = {
   FORGOT_PASSWORD_SEND_OTP: '/auth/forgot-password/send-otp',
   FORGOT_PASSWORD_VERIFY_OTP: '/auth/forgot-password/verify-otp',
   FORGOT_PASSWORD_RESET: '/auth/forgot-password/reset',
+  UPDATE_PENDING_REGISTRATION: '/auth/pending-registration',
 
   // Users
   ME: '/users/me',
@@ -30,6 +31,8 @@ export const ENDPOINTS = {
   DELETE_MY_ACCOUNT: '/users/me',
   REQUEST_PROFILE_EDIT: '/users/request-profile-edit',
   PROFILE_EDIT_REQUESTS: '/users/profile-edit-requests',
+  REVIEW_PROFILE_EDIT: (id: string) => `/users/profile-edit-requests/${id}`,
+  CHANGE_PASSWORD: '/users/change-password',
 
   // Polls
   ACTIVE_POLL: '/polls/active',

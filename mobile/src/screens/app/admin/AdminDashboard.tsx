@@ -22,6 +22,7 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [tomorrowStats, setTomorrowStats] = useState<any>(null);
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
+  const [editRequests, setEditRequests] = useState(0);
   const [donationSummary, setDonationSummary] = useState<any>(null);
   const [pollActive, setPollActive] = useState<boolean | null>(null);
   const [pollToggling, setPollToggling] = useState(false);
@@ -39,6 +40,14 @@ export default function AdminDashboard() {
         api.get(ENDPOINTS.ACTIVE_POLL_STATS),
       ]);
       setPendingUsers(usersRes.data.data || []);
+
+      // Badge count for the profile edit review queue. Non-fatal — an older
+      // backend without this route should not break the dashboard.
+      try {
+        const editRes = await api.get(ENDPOINTS.PROFILE_EDIT_REQUESTS);
+        setEditRequests((editRes.data.data || []).length);
+      } catch { setEditRequests(0); }
+
       setTomorrowStats(statsRes.data.data);
       const liveActive = statsRes.data.data?.isPollActive ?? statsRes.data.data?.poll?.is_active;
       if (liveActive !== undefined) setPollActive(liveActive);
@@ -244,6 +253,7 @@ export default function AdminDashboard() {
               <>
                 <AdminAction icon="👥" title="Users" color={COLORS.accentOrange} badge={pendingUsers.length} onPress={() => router.push('/(app)/admin/users' as any)} />
                 <AdminAction icon="⭐" title="Special Cases" color={COLORS.accentOrange} badge={tomorrowStats?.specialCaseCount || 0} onPress={() => router.push('/(app)/admin/special-cases' as any)} />
+                <AdminAction icon="📝" title="Edit Requests" color={COLORS.accentOrange} badge={editRequests} onPress={() => router.push('/(app)/admin/profile-edit-requests' as any)} />
                 <AdminAction icon="💬" title="Feedback" color={COLORS.accent} onPress={() => router.push('/(app)/admin/feedback' as any)} />
                 <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
                 <AdminAction icon="🛵" title="Riders" color={COLORS.accentGreen} onPress={() => router.push('/(app)/admin/tracking' as any)} />
@@ -253,6 +263,7 @@ export default function AdminDashboard() {
             ) : (
               <>
                 <AdminAction icon="👥" title="Zone Approvals" color={COLORS.accentOrange} badge={pendingUsers.length} onPress={() => router.push('/(app)/admin/users' as any)} />
+                <AdminAction icon="📝" title="Edit Requests" color={COLORS.accentOrange} badge={editRequests} onPress={() => router.push('/(app)/admin/profile-edit-requests' as any)} />
                 <AdminAction icon="💬" title="Feedback" color={COLORS.accent} onPress={() => router.push('/(app)/admin/feedback' as any)} />
                 <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
                 <AdminAction icon="💬" title="Chat" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/chat' as any)} />

@@ -5,7 +5,7 @@ const { validate } = require('../middleware/validate');
 const { otpLimiter, authLimiter } = require('../middleware/rateLimiter');
 const { authenticate, authorize } = require('../middleware/auth');
 const {
-  sendOtp, register, login, createAdmin, createSuperAdmin,
+  sendOtp, register, updatePendingRegistration, login, createAdmin, createSuperAdmin,
   listAdmins, deleteAdmin, deleteSuperAdmin, switchRole,
   getZoneAdmin, refreshToken, updateFcmToken,
   forgotPasswordSendOtp, forgotPasswordVerifyOtp, forgotPasswordReset,
@@ -60,6 +60,25 @@ router.post(
   ],
   validate,
   forgotPasswordReset
+);
+
+// Edit a still-pending registration — no OTP, the edit token proves identity
+router.patch(
+  '/pending-registration',
+  authLimiter,
+  [
+    body('name').optional().trim().isLength({ min: 2, max: 100 }).withMessage('Name must be 2-100 characters'),
+    body('gender').optional().isIn(['male', 'female']).withMessage('Invalid gender'),
+    body('occupation').optional().isIn(['student', 'employee', 'others']).withMessage('Invalid occupation'),
+    body('area').optional().isIn(['kengeri', 'nayandahalli', 'nagarabavi', 'uttarahalli']).withMessage('Invalid area'),
+    body('zone').optional().isIn(['masjid', 'boys_hostel', 'stanza', 'girls']).withMessage('Invalid zone'),
+    body('address').optional().trim().isLength({ min: 1 }).withMessage('Address cannot be empty'),
+    body('password').optional()
+      .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+      .matches(/[!@#$%^&*(),.?":{}|<>]/).withMessage('Password must contain at least one special character'),
+  ],
+  validate,
+  updatePendingRegistration
 );
 
 // Register new user (with OTP verification + password - creates in users table)

@@ -16,6 +16,11 @@ const ProfileEditRequest = sequelize.define('ProfileEditRequest', {
     allowNull: false,
     comment: 'JSON of fields user wants to change',
   },
+  previous_values: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: 'Snapshot of the same fields before the request, so reviewers can see before -> after',
+  },
   status: {
     type: DataTypes.ENUM('pending', 'approved', 'rejected'),
     defaultValue: 'pending',

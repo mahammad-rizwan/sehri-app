@@ -175,7 +175,9 @@ export default function BroadcastScreen() {
         // Background denied — we still track but warn the app will pause in background
         Alert.alert(
           'Background Location Denied',
-          'Tracking will pause when you leave the app. For uninterrupted delivery updates, go to Settings → App → Location → set to "Allow all the time".',
+          Platform.OS === 'ios'
+            ? 'Tracking will pause when you leave the app. For uninterrupted delivery updates, go to Settings → One Message → Location → set to "Always".'
+            : 'Tracking will pause when you leave the app. For uninterrupted delivery updates, go to Settings → App → Location → set to "Allow all the time".',
           [{ text: 'Continue Anyway' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }],
         );
         // Continue with foreground-only tracking via interval fallback below
@@ -194,13 +196,17 @@ export default function BroadcastScreen() {
             accuracy: Location.Accuracy.High,
             timeInterval: 20000,
             distanceInterval: 0,
+            // iOS: blue status bar pill while tracking, and telling it this is
+            // vehicle navigation stops Core Location throttling the updates.
             showsBackgroundLocationIndicator: true,
+            pausesUpdatesAutomatically: false,
+            activityType: Location.ActivityType.AutomotiveNavigation,
+            // Android only — ignored on iOS, which uses UIBackgroundModes instead.
             foregroundService: {
               notificationTitle: 'Sehri Connect – Live Delivery',
               notificationBody: 'Broadcasting your location to users…',
               notificationColor: '#C9A84C',
             },
-            pausesUpdatesAutomatically: false,
           });
         } catch (bgErr) {
           // Background task failed (e.g. bg permission denied) — fall back to interval

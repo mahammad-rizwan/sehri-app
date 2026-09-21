@@ -1,8 +1,8 @@
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
-const { User, Admin, SuperAdmin, OTP, Tracking } = require('../models');
+const { User, Admin, SuperAdmin, OTP, Tracking, ProfileEditRequest } = require('../models');
 const { saveOTP, verifyOTP, sendOTP } = require('../utils/otp');
-const { generateTokens, verifyRefreshToken } = require('../utils/jwt');
+const { generateTokens, verifyRefreshToken, generatePendingEditToken, verifyPendingEditToken } = require('../utils/jwt');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
 
@@ -101,6 +101,9 @@ const register = async (req, res) => {
       name: user.name,
       phone: user.phone,
       distributorContact: DISTRIBUTOR_PHONE,
+      // OTP was just verified above — let them correct their details without
+      // burning another SMS.
+      editToken: generatePendingEditToken(user.id),
     }, 'Registration successful! Contact the Sehri distributor at ' + DISTRIBUTOR_PHONE + ' for approval.', 201);
   } catch (err) {
     logger.error('register error:', err);
@@ -151,7 +154,28 @@ const login = async (req, res) => {
     // Only check status for regular users
     if (role === 'user' && user.status !== 'approved') {
       if (user.status === 'pending') {
-        return error(res, 'Your account is pending approval. Please contact your zone admin for approval.', 403, { status: 'pending', phone: user.phone, zone: user.zone, name: user.name, address: user.address, gender: user.gender, occupation: user.occupation, area: user.area });
+        // A user who is pending *because they asked to change their profile*
+        // must not get an edit token — that would let them rewrite their
+        // details while the request sits in the review queue.
+        const openEdit = await ProfileEditRequest.findOne({
+          where: { user_id: user.id, status: 'pending' },
+        });
+
+        if (openEdit) {
+          return error(res, 'Your profile changes are awaiting approval. You can log in once a reviewer approves them.', 403, {
+            status: 'pending', reason: 'profile_edit', phone: user.phone, zone: user.zone, name: user.name,
+            requestedChanges: openEdit.requested_changes || {},
+          });
+        }
+
+        // Fresh registration awaiting approval. The password check above already
+        // proved who this is, so they can correct their details without
+        // verifying by SMS a second time.
+        return error(res, 'Your account is pending approval. Please contact your zone admin for approval.', 403, {
+          status: 'pending', reason: 'registration', phone: user.phone, zone: user.zone, name: user.name,
+          address: user.address, gender: user.gender, occupation: user.occupation, area: user.area,
+          editToken: generatePendingEditToken(user.id),
+        });
       }
       if (user.status === 'rejected') {
         return error(res, 'Your account has been rejected. Please contact admin.', 403);
@@ -380,6 +404,84 @@ const refreshToken = async (req, res) => {
   } catch (err) {
     logger.error('refreshToken error:', err);
     return error(res, 'Failed to refresh token', 500);
+  }
+};
+
+/**
+ * PATCH /auth/pending-registration
+ * Update a still-pending registration without re-verifying by OTP.
+ *
+ * Authorised by the short-lived edit token handed out at login (after a correct
+ * password) or right after registration (after a verified OTP). Phone number
+ * and approval status are deliberately not editable here — changing the phone
+ * would move the account to an unverified number.
+ */
+const updatePendingRegistration = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return error(res, 'Edit session required. Please log in again.', 401);
+    }
+
+    let decoded;
+    try {
+      decoded = verifyPendingEditToken(authHeader.split(' ')[1]);
+    } catch (e) {
+      return error(res, 'Your edit session has expired. Please log in again.', 401);
+    }
+
+    const user = await User.findByPk(decoded.userId);
+    if (!user) return error(res, 'Account not found', 404);
+
+    // Once an admin has acted on the account this route must stop working.
+    if (user.status !== 'pending') {
+      return error(res, 'This account has already been reviewed and can no longer be edited here.', 403);
+    }
+
+    // Belt and braces: never let this route be used to sidestep a profile edit
+    // that is sitting in the review queue.
+    const openEdit = await ProfileEditRequest.findOne({
+      where: { user_id: user.id, status: 'pending' },
+    });
+    if (openEdit) {
+      return error(res, 'Your profile changes are awaiting approval and cannot be edited right now.', 403);
+    }
+
+    const { name, gender, occupation, city, area, zone, address, password } = req.body;
+
+    const updates = {};
+    if (name !== undefined)       updates.name = String(name).trim();
+    if (gender !== undefined)     updates.gender = gender;
+    if (occupation !== undefined) updates.occupation = occupation;
+    if (city !== undefined)       updates.city = city;
+    if (area !== undefined)       updates.area = area;
+    if (zone !== undefined)       updates.zone = zone;
+    if (address !== undefined)    updates.address = String(address).trim();
+
+    // Password is optional on edit — only touched when a new one is supplied.
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      updates.password = await bcrypt.hash(password, salt);
+    }
+
+    if (!Object.keys(updates).length) {
+      return error(res, 'No changes supplied', 400);
+    }
+
+    await user.update(updates);
+    logger.info(`Pending registration edited without OTP: ${user.phone} (${user.name})`);
+
+    return success(res, {
+      userId: user.id,
+      name: user.name,
+      phone: user.phone,
+      distributorContact: DISTRIBUTOR_PHONE,
+      // Refreshed so a slow edit session does not expire mid-flow.
+      editToken: generatePendingEditToken(user.id),
+    }, 'Your details have been updated. Your account is still pending approval.');
+  } catch (err) {
+    logger.error('updatePendingRegistration error:', err);
+    return error(res, 'Failed to update your details', 500);
   }
 };
 
@@ -642,6 +744,7 @@ const getZoneAdmin = async (req, res) => {
 module.exports = {
   sendOtp,
   register,
+  updatePendingRegistration,
   login,
   createAdmin,
   createSuperAdmin,

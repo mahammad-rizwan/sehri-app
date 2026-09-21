@@ -154,7 +154,17 @@ export default function RegisterScreen() {
   const [resendTimer, setResendTimer]             = useState(0);
   const [passwordError, setPasswordError]         = useState('');
   const router = useRouter();
-  const { sendOTP, register } = useAuthStore();
+  const { sendOTP, register, updatePendingRegistration, pendingEditToken } = useAuthStore();
+
+  /**
+   * Editing a registration that is still awaiting approval. The phone number is
+   * not changing and was already verified once, so there is nothing for a second
+   * OTP to prove — the edit token carries the proof instead. If the token is
+   * missing or expired we fall back to the original OTP flow rather than
+   * letting an unauthenticated edit through.
+   */
+  const [editingAfterRegister, setEditingAfterRegister] = useState(false);
+  const isEditMode = (params.edit === '1' || editingAfterRegister) && !!pendingEditToken;
 
   // ── Derived options (cascade) ──
   const localityOptions = ((BANGALORE_AREAS as any)[bangaloreArea]?.localities || []).map(
@@ -294,6 +304,42 @@ export default function RegisterScreen() {
       } else {
         Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to send OTP' });
       }
+    } finally { setLoading(false); }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!form.name.trim()) { Toast.show({ type: 'error', text1: 'Please enter your full name' }); return; }
+    // Password is optional here — blank means "keep the one I already have".
+    if (form.password) {
+      const pwErr = validatePassword(form.password);
+      if (pwErr) { Toast.show({ type: 'error', text1: pwErr }); return; }
+      if (form.password !== form.confirmPassword) { Toast.show({ type: 'error', text1: 'Passwords do not match' }); return; }
+    }
+    try {
+      setLoading(true);
+      await updatePendingRegistration({
+        name: form.name,
+        gender: form.gender,
+        occupation: form.occupation,
+        city: 'Bangalore',
+        area: locality,
+        zone: internalZone,
+        address: finalAddress,
+        ...(form.password ? { password: form.password } : {}),
+      });
+      Toast.show({ type: 'success', text1: 'Details updated' });
+      transitionToStep('success');
+    } catch (err: any) {
+      if (err?.message === 'NO_EDIT_TOKEN' || err?.response?.status === 401) {
+        Toast.show({
+          type: 'error',
+          text1: 'Your edit session expired',
+          text2: 'Please log in again to edit your details.',
+        });
+        router.replace('/(auth)/login');
+        return;
+      }
+      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Could not save your details' });
     } finally { setLoading(false); }
   };
 
@@ -518,12 +564,16 @@ export default function RegisterScreen() {
       </View>
 
       {/* Password */}
-      <Text style={s.label}>Password *</Text>
-      <Text style={s.hint}>Min 8 characters, at least 1 special character</Text>
+      <Text style={s.label}>{isEditMode ? 'New Password' : 'Password *'}</Text>
+      <Text style={s.hint}>
+        {isEditMode
+          ? 'Leave blank to keep your current password'
+          : 'Min 8 characters, at least 1 special character'}
+      </Text>
       <View style={s.pwdRow}>
         <TextInput
           style={[s.input, s.pwdField]}
-          placeholder="Create a password"
+          placeholder={isEditMode ? 'Leave blank to keep current' : 'Create a password'}
           placeholderTextColor={COLORS.textMuted}
           value={form.password}
           onChangeText={(t) => { setForm({ ...form, password: t }); setPasswordError(validatePassword(t)); }}
@@ -537,7 +587,7 @@ export default function RegisterScreen() {
       {passwordError ? <Text style={s.fieldError}>{passwordError}</Text> : null}
 
       {/* Confirm Password */}
-      <Text style={s.label}>Confirm Password *</Text>
+      <Text style={s.label}>{isEditMode ? 'Confirm New Password' : 'Confirm Password *'}</Text>
       <View style={s.pwdRow}>
         <TextInput
           style={[s.input, s.pwdField]}
@@ -555,7 +605,13 @@ export default function RegisterScreen() {
       {form.confirmPassword && form.password !== form.confirmPassword
         ? <Text style={s.fieldError}>Passwords do not match</Text> : null}
 
-      <GoldButton title="Get OTP" onPress={handleSendOTP} loading={loading} size="lg" style={{ marginTop: 20 }} />
+      <GoldButton
+        title={isEditMode ? 'Save Changes' : 'Get OTP'}
+        onPress={isEditMode ? handleSaveEdit : handleSendOTP}
+        loading={loading}
+        size="lg"
+        style={{ marginTop: 20 }}
+      />
     </View>
   );
 
@@ -586,7 +642,7 @@ export default function RegisterScreen() {
       {/* Edit details option */}
       <TouchableOpacity
         style={s.editBtn}
-        onPress={() => transitionToStep('details')}
+        onPress={() => { setEditingAfterRegister(true); transitionToStep('details'); }}
         activeOpacity={0.8}
       >
         <Ionicons name="create-outline" size={16} color="#C9A84C" />
@@ -631,14 +687,14 @@ export default function RegisterScreen() {
           {/* Step dots */}
           {step !== 'success' && (
             <Animated.View style={[s.stepIndicators, { opacity: pageFade }]}>
-              {['location', 'details', 'otp'].map((st, i) => {
-                const current = ['location', 'details', 'otp'].indexOf(step);
+              {(isEditMode ? ['location', 'details'] : ['location', 'details', 'otp']).map((st, i, arr) => {
+                const current = arr.indexOf(step);
                 return (
                   <View key={st} style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <View style={[s.stepDot, current >= i && s.stepDotActive]}>
                       <Text style={s.stepDotText}>{i + 1}</Text>
                     </View>
-                    {i < 2 && <View style={[s.stepLine, current > i && s.stepLineActive]} />}
+                    {i < arr.length - 1 && <View style={[s.stepLine, current > i && s.stepLineActive]} />}
                   </View>
                 );
               })}

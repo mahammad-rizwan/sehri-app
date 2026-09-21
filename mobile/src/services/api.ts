@@ -21,8 +21,10 @@ class ApiService {
     // Request interceptor - attach token
     this.instance.interceptors.request.use(
       async (config) => {
+        // A caller that set its own Authorization (e.g. the short-lived
+        // pending-edit token) must win over the stored session token.
         const token = await SecureStore.getItemAsync('accessToken');
-        if (token) {
+        if (token && !config.headers.Authorization) {
           config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
@@ -86,8 +88,9 @@ class ApiService {
       timeout: timeoutMs,
     });
 
-  patch = (url: string, data?: any) =>
-    this.instance.patch(url, data);
+  patch = (url: string, data?: any, authToken?: string) =>
+    this.instance.patch(url, data,
+      authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : undefined);
 
   put = (url: string, data?: any) =>
     this.instance.put(url, data);
