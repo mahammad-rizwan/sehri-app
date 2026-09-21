@@ -499,23 +499,38 @@ export default function AdminDonationHistory() {
                     <Text style={{ fontSize: 34 }}>🖼️</Text>
                     <Text style={st.proofFallbackTitle}>Could not load the proof</Text>
                     <Text style={st.proofFallbackSub}>
-                      The image may have been lost in a redeploy. Set CLOUDINARY_URL so proofs
-                      are stored off the server's temporary disk.
+                      Check your connection and try again. Proofs uploaded before Cloudinary
+                      was configured were stored on the server's temporary disk and are gone.
                     </Text>
+                    <TouchableOpacity
+                      onPress={() => { setProofError(false); setProofLoading(true); }}
+                      style={st.retryBtn}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={st.retryTxt}>Try again</Text>
+                    </TouchableOpacity>
                   </View>
                 ) : (
-                  <>
-                    {proofLoading && (
-                      <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 40 }} />
-                    )}
+                  <View style={st.proofBox}>
+                    {/* The image must keep its real size at all times. Collapsing
+                        it to height 0 while loading stops RN laying it out, so it
+                        never decodes and onLoadEnd never fires — the spinner then
+                        spins forever. Overlay the spinner instead. */}
                     <Image
                       source={{ uri: proofData.url, headers: { Authorization: `Bearer ${proofData.token}` } }}
-                      style={[st.proofImg, proofLoading && { height: 0 }]}
+                      style={st.proofImg}
                       resizeMode="contain"
+                      onLoadStart={() => setProofLoading(true)}
                       onLoadEnd={() => setProofLoading(false)}
                       onError={() => { setProofLoading(false); setProofError(true); }}
                     />
-                  </>
+                    {proofLoading && (
+                      <View style={st.proofSpinner} pointerEvents="none">
+                        <ActivityIndicator color={COLORS.primary} size="large" />
+                        <Text style={st.proofSpinnerTxt}>Loading proof…</Text>
+                      </View>
+                    )}
+                  </View>
                 )}
               </ScrollView>
             )}
@@ -527,6 +542,18 @@ export default function AdminDonationHistory() {
 }
 
 const st = StyleSheet.create({
+  proofBox:        { width: '100%', position: 'relative' },
+  proofSpinner:    {
+    position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: 'rgba(5,13,22,0.55)', borderRadius: 12,
+  },
+  proofSpinnerTxt: { color: COLORS.textSecondary, fontSize: 12 },
+  retryBtn:        {
+    marginTop: 14, borderWidth: 1, borderColor: COLORS.primary,
+    borderRadius: 8, paddingHorizontal: 18, paddingVertical: 8,
+  },
+  retryTxt:        { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
   listHeader: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', zIndex: 20,

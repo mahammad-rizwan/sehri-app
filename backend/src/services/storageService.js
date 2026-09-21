@@ -238,8 +238,30 @@ async function reportStorageMode() {
   logger.error('🗂️  Donation submissions will be REJECTED until this is fixed (proofs are never written to disk when Cloudinary is configured).');
 }
 
+/**
+ * Asks Cloudinary for a display-sized copy instead of the original.
+ *
+ * A phone camera screenshot is often ~1MB; an admin working through a queue
+ * would pull that every time. `w_1400,q_auto` is still comfortably readable for
+ * verifying a UPI reference. Left untouched for non-Cloudinary URLs, and for
+ * URLs that already carry a transformation.
+ */
+function displaySizedUrl(url) {
+  if (!/^https:\/\/res\.cloudinary\.com\//.test(url)) return url;
+  const marker = '/image/upload/';
+  const i = url.indexOf(marker);
+  if (i === -1) return url;
+
+  const rest = url.slice(i + marker.length);
+  // A version segment (v123456) or a folder means no transformation is present.
+  if (!/^v\d+\//.test(rest) && rest.includes(',')) return url;
+
+  return `${url.slice(0, i + marker.length)}w_1400,q_auto/${rest}`;
+}
+
 /** Streams a remote proof image back through the caller's response. */
-function streamRemoteProof(url, res) {
+function streamRemoteProof(rawUrl, res) {
+  const url = displaySizedUrl(rawUrl);
   return new Promise((resolve, reject) => {
     const req = https.get(url, (upstream) => {
       if (upstream.statusCode !== 200) {
@@ -265,6 +287,7 @@ function streamRemoteProof(url, res) {
 module.exports = {
   saveDonationProof,
   reportStorageMode,
+  displaySizedUrl,
   verifyCloudinary,
   streamRemoteProof,
   isCloudinaryEnabled,
