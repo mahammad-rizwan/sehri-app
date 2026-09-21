@@ -55,6 +55,13 @@ export interface RegisterData {
   otp: string;
 }
 
+/**
+ * OTP endpoints wait on MessageCentral, which is slower and less predictable
+ * than our own API. The default 15s budget was cutting these off mid-flight —
+ * the SMS would arrive but the app had already given up on the request.
+ */
+const OTP_TIMEOUT_MS = 45000;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   userRole: null,
@@ -89,7 +96,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   sendOTP: async (phone: string, purpose: string) => {
-    const { data } = await api.post(ENDPOINTS.SEND_OTP, { phone, purpose });
+    const { data } = await api.post(ENDPOINTS.SEND_OTP, { phone, purpose }, OTP_TIMEOUT_MS);
     return data;
   },
 
@@ -109,7 +116,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   register: async (registerData: RegisterData) => {
-    const { data } = await api.post(ENDPOINTS.REGISTER, registerData);
+    const { data } = await api.post(ENDPOINTS.REGISTER, registerData, OTP_TIMEOUT_MS);
     return data;
   },
 
@@ -142,12 +149,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   forgotPasswordSendOTP: async (phone: string) => {
-    const { data } = await api.post(ENDPOINTS.FORGOT_PASSWORD_SEND_OTP, { phone });
+    const { data } = await api.post(ENDPOINTS.FORGOT_PASSWORD_SEND_OTP, { phone }, OTP_TIMEOUT_MS);
     return data;
   },
 
   forgotPasswordVerifyOTP: async (phone: string, otp: string) => {
-    const { data } = await api.post(ENDPOINTS.FORGOT_PASSWORD_VERIFY_OTP, { phone, otp });
+    const { data } = await api.post(ENDPOINTS.FORGOT_PASSWORD_VERIFY_OTP, { phone, otp }, OTP_TIMEOUT_MS);
     return data;
   },
 

@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { Op } = require('sequelize');
-const { User, Admin, SuperAdmin, OTP } = require('../models');
+const { User, Admin, SuperAdmin, OTP, Tracking } = require('../models');
 const { saveOTP, verifyOTP, sendOTP } = require('../utils/otp');
 const { generateTokens, verifyRefreshToken } = require('../utils/jwt');
 const { success, error } = require('../utils/response');
@@ -365,6 +365,10 @@ const refreshToken = async (req, res) => {
       user = await SuperAdmin.findByPk(decoded.userId);
     } else if (decoded.role === 'admin') {
       user = await Admin.findByPk(decoded.userId);
+    } else if (decoded.role === 'rider') {
+      // Riders live in `tracking`, not `users` — without this branch every
+      // rider token refresh 404s and the app logs them straight back out.
+      user = await Tracking.findByPk(decoded.userId);
     } else {
       user = await User.findByPk(decoded.userId);
     }

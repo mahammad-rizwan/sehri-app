@@ -43,9 +43,11 @@ class ApiService {
             const refreshToken = await SecureStore.getItemAsync('refreshToken');
             if (!refreshToken) throw new Error('No refresh token');
 
-            const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-              refreshToken,
-            });
+            const { data } = await axios.post(
+              `${API_BASE_URL}/auth/refresh`,
+              { refreshToken },
+              { timeout: API_TIMEOUT },
+            );
 
             await SecureStore.setItemAsync('accessToken', data.data.accessToken);
             await SecureStore.setItemAsync('refreshToken', data.data.refreshToken);
@@ -75,8 +77,8 @@ class ApiService {
   get = (url: string, params?: any) =>
     this.instance.get(url, { params });
 
-  post = (url: string, data?: any) =>
-    this.instance.post(url, data);
+  post = (url: string, data?: any, timeoutMs?: number) =>
+    this.instance.post(url, data, timeoutMs ? { timeout: timeoutMs } : undefined);
 
   postForm = (url: string, formData: FormData, timeoutMs = 60000) =>
     this.instance.post(url, formData, {

@@ -89,10 +89,19 @@ export default function SplashScreen() {
       ).start();
     });
 
+    // initialize() can take several seconds (profile fetch, token refresh), so
+    // this timer may still be pending after the screen is gone. Left uncleared
+    // it fires a router.replace from an unmounted splash and yanks the user out
+    // of whatever screen they had reached.
+    let navTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
     const boot = async () => {
       await useAuthStore.getState().initialize();
+      if (cancelled) return;
       const { isAuthenticated: authed, userRole } = useAuthStore.getState();
-      setTimeout(() => {
+      navTimer = setTimeout(() => {
+        if (cancelled) return;
         if (authed) {
           if (userRole === 'super_admin' || userRole === 'admin') {
             router.replace('/(app)/admin/dashboard');
@@ -106,6 +115,11 @@ export default function SplashScreen() {
     };
 
     boot();
+
+    return () => {
+      cancelled = true;
+      if (navTimer) clearTimeout(navTimer);
+    };
   }, []);
 
   const spinInterpolation = rotateAnim.interpolate({

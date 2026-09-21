@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, KeyboardAvoidingView, Platform, Animated, Dimensions, Easing,
+  ScrollView, KeyboardAvoidingView, Platform, Animated, Dimensions, Easing, BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -232,12 +232,24 @@ export default function RegisterScreen() {
     setStep(newStep);
   };
 
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const startTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
     setResendTimer(60);
-    const iv = setInterval(() => {
-      setResendTimer((t) => { if (t <= 1) { clearInterval(iv); return 0; } return t - 1; });
+    timerRef.current = setInterval(() => {
+      setResendTimer((t) => {
+        if (t <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          timerRef.current = null;
+          return 0;
+        }
+        return t - 1;
+      });
     }, 1000);
   };
+
+  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
 
   const validatePassword = (pw: string) => {
     if (!pw) return '';
@@ -266,7 +278,22 @@ export default function RegisterScreen() {
       transitionToStep('otp');
       startTimer();
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to send OTP' });
+      // A timeout is not a failure — the backend has very likely already handed
+      // the SMS to MessageCentral. Dropping the user back to the details step
+      // here is what made a delivered OTP look like the app going backwards.
+      const timedOut = err?.code === 'ECONNABORTED' || !err?.response;
+      if (timedOut) {
+        Toast.show({
+          type: 'info',
+          text1: 'Taking longer than usual',
+          text2: 'If the OTP arrives, enter it below — otherwise tap Resend.',
+          visibilityTime: 6000,
+        });
+        transitionToStep('otp');
+        startTimer();
+      } else {
+        Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to send OTP' });
+      }
     } finally { setLoading(false); }
   };
 
@@ -290,6 +317,21 @@ export default function RegisterScreen() {
       Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Registration failed' });
     } finally { setLoading(false); }
   };
+
+  // Walk back through the steps rather than abandoning the whole registration.
+  const handleBack = () => {
+    if (step === 'otp') return transitionToStep('details');
+    if (step === 'details') return transitionToStep('location');
+    router.back();
+  };
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step === 'otp' || step === 'details') { handleBack(); return true; }
+      return false;
+    });
+    return () => sub.remove();
+  }, [step]);
 
   const spin = rotateAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
@@ -574,7 +616,7 @@ export default function RegisterScreen() {
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <Animated.View style={[s.header, { opacity: pageFade, transform: [{ translateY: pageSlide }] }]}>
-            <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+            <TouchableOpacity onPress={handleBack} style={s.backBtn} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={20} color={COLORS.primary} />
               <Text style={s.backBtnText}>Back</Text>
             </TouchableOpacity>

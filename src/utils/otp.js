@@ -15,7 +15,22 @@ const OTP_EXPIRY_MINUTES = 10;
 let _cachedToken = null;
 let _tokenExpiry = 0;
 
-const apiCall = (method, urlStr, headers = {}, retries = 2) =>
+/**
+ * Drop the cached MC token. Without this a token that MessageCentral revokes
+ * or expires early would keep being reused for up to 22 hours, failing every
+ * OTP send and verify until the process restarted.
+ */
+const invalidateMCToken = () => {
+  _cachedToken = null;
+  _tokenExpiry = 0;
+};
+
+/** MC signals a bad/expired token with 401/403, or responseCode 401. */
+const isAuthFailure = (resp) =>
+  resp?._status === 401 || resp?._status === 403 ||
+  String(resp?.responseCode ?? '') === '401';
+
+const apiCall = (method, urlStr, headers = {}, retries = 1) =>
   new Promise((resolve, reject) => {
     const attempt = () => {
       const parsed = new URL(urlStr);
@@ -46,7 +61,7 @@ const apiCall = (method, urlStr, headers = {}, retries = 2) =>
           reject(err);
         }
       });
-      req.setTimeout(30000, () => {
+      req.setTimeout(12000, () => {
         req.destroy();
         if (retries > 0) {
           logger.warn(`MC ${method} timeout, retrying... (${retries} left)`);
@@ -97,7 +112,7 @@ const getMCToken = async () => {
         logger.warn(`MC token [${label}] request error: ${e.message}`);
         resolve({ _error: e.message });
       });
-      req.setTimeout(20000, () => {
+      req.setTimeout(10000, () => {
         req.destroy();
         resolve({ _error: 'timeout' });
       });
@@ -141,13 +156,18 @@ const getMCToken = async () => {
 const sendOTP = async (phone, purpose = 'register') => {
   await OTP.update({ is_used: true }, { where: { phone, purpose, is_used: false } });
 
-  const token = await getMCToken();
+  const url = `https://cpaas.messagecentral.com/verification/v3/send` +
+              `?countryCode=91&flowType=SMS&mobileNumber=${phone}&otpLength=4`;
 
-  const resp = await apiCall('POST',
-    `https://cpaas.messagecentral.com/verification/v3/send` +
-    `?countryCode=91&flowType=SMS&mobileNumber=${phone}&otpLength=4`,
-    { authToken: token }
-  );
+  let resp = await apiCall('POST', url, { authToken: await getMCToken() });
+
+  // A cached token that MC has since rejected is the one failure worth an
+  // immediate retry — otherwise every send fails until the server restarts.
+  if (isAuthFailure(resp)) {
+    logger.warn('MC rejected the cached token on send — refreshing and retrying once');
+    invalidateMCToken();
+    resp = await apiCall('POST', url, { authToken: await getMCToken() });
+  }
 
   const verificationId = resp?.data?.verificationId ?? resp?.verificationId ?? null;
   if (!verificationId) throw new Error(`MC send failed: ${JSON.stringify(resp)}`);
@@ -200,7 +220,9 @@ const verifyOTP = async (phone, code, purpose) => {
 
   logger.info(`MC validateOtp GET response: ${JSON.stringify(resp)}`);
 
-  // If GET gives 401/405, try POST
+  // A 401 here can mean a stale token rather than a wrong method, so refresh
+  // it before the POST fallback.
+  if (isAuthFailure(resp)) invalidateMCToken();
   if (resp?._status === 401 || resp?._status === 405) {
     resp = await apiCall('POST',
       `https://cpaas.messagecentral.com/verification/v3/validateOtp` +
@@ -228,4 +250,4 @@ const verifyOTP = async (phone, code, purpose) => {
 };
 
 const saveOTP = async () => null;
-module.exports = { saveOTP, verifyOTP, sendOTP };
+module.exports = { saveOTP, verifyOTP, sendOTP, invalidateMCToken };
