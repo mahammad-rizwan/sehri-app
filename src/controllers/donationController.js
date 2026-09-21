@@ -1,5 +1,6 @@
 const { Donation } = require('../models');
 const { success, error } = require('../utils/response');
+const { saveDonationProof, streamRemoteProof, localUploadDir } = require('../services/storageService');
 const logger = require('../utils/logger');
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -55,6 +56,10 @@ const submitDonation = async (req, res) => {
     const donationId = require('uuid').v4();
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+    // Cloudinary when configured, local disk otherwise. Returns the value to
+    // store in proof_url — an https:// URL or a /uploads/... path.
+    const proofUrl = await saveDonationProof(req.file);
+
     await sequelize.query(`
       INSERT INTO donations
         (id, user_id, donor_name, donor_phone, donor_zone, is_anonymous, amount, status, message, proof_url, created_at, updated_at)
@@ -70,7 +75,7 @@ const submitDonation = async (req, res) => {
         is_anonymous ? 1 : 0,
         declaredAmount,
         message?.trim() || null,
-        `/uploads/donations/${req.file.filename}`,
+        proofUrl,
         now,
         now,
       ],
@@ -207,9 +212,24 @@ const getDonationProof = async (req, res) => {
     if (!donation || !donation.proof_url) {
       return res.status(404).json({ message: 'Proof not found' });
     }
+
+    // Remote (Cloudinary) proofs are streamed through this authenticated route
+    // so the underlying URL is never handed to a client.
+    if (/^https?:\/\//i.test(donation.proof_url)) {
+      try {
+        return await streamRemoteProof(donation.proof_url, res);
+      } catch (streamErr) {
+        logger.error('getDonationProof remote fetch error:', streamErr.message);
+        if (res.headersSent) return res.end();
+        return res.status(502).json({ message: 'Could not retrieve proof from storage' });
+      }
+    }
+
+    // Legacy rows written before Cloudinary was configured still live on disk.
     const fs   = require('fs');
     const path = require('path');
-    const filePath = path.join(__dirname, '../../', donation.proof_url);
+    const safeName = path.basename(donation.proof_url);
+    const filePath = path.join(localUploadDir, safeName);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'Proof file not found on disk' });
     }

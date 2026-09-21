@@ -272,7 +272,7 @@ export default function AdminPollHistory() {
                 {!isSuperAdmin && (
                   <>
                     <Text style={styles.sectionTitleSm}>Address-wise Details</Text>
-                    {renderVoterGroup(dateStats.zones?.[user?.zone]?.voters || [])}
+                    {renderVoterGroup(user?.zone ? dateStats.zones?.[user.zone]?.voters || [] : [])}
                   </>
                 )}
               </>

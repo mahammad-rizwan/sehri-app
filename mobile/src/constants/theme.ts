@@ -214,3 +214,9 @@ export type AreaKey = keyof typeof AREA_CONFIG;
 export type BangaloreAreaKey = keyof typeof BANGALORE_AREAS;
 export type OccupationKey = keyof typeof OCCUPATIONS;
 export type Role = 'user' | 'admin' | 'super_admin';
+
+/**
+ * expo-linear-gradient requires at least two stops, so its `colors` prop is a
+ * tuple rather than a plain array. Use this for any value passed to it.
+ */
+export type GradientColors = readonly [string, string, ...string[]];

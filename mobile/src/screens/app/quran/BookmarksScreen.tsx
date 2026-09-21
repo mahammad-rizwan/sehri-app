@@ -7,11 +7,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, SIZES } from '../../../constants/theme';
+import { COLORS, SIZES, GradientColors } from '../../../constants/theme';
 import { getBookmarks, removeBookmark, Bookmark } from './quranStorage';
 import { useQuranSettings, ThemeKey } from '../../../store/quranSettingsStore';
 
-const THEMES: Record<ThemeKey, { bg: string[]; card: string; text: string; secondary: string; border: string }> = {
+const THEMES: Record<ThemeKey, { bg: GradientColors; card: string; text: string; secondary: string; border: string }> = {
   dark: { bg: ['#050D16', '#0D1B2A', '#0A1A2E'], card: '#111E2E', text: '#E8E8E8', secondary: '#A0AAB5', border: 'rgba(255,255,255,0.06)' },
   sepia: { bg: ['#F5E6C8', '#EDD9B5', '#E5CEA3'], card: '#FFF8EC', text: '#3E2C1A', secondary: '#6B5B4B', border: 'rgba(62,44,26,0.12)' },
   light: { bg: ['#FFFFFF', '#F8F8FA', '#F0F0F4'], card: '#FFFFFF', text: '#1A1A2E', secondary: '#666680', border: 'rgba(0,0,0,0.08)' },

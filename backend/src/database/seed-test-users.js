@@ -9,8 +9,12 @@ const seed = async () => {
     await sequelize.authenticate();
     logger.info('DB connected');
 
-    const userPass  = await bcrypt.hash('pass@123',  10);
-    const adminPass = await bcrypt.hash('Admin@123', 10);
+    // Dev-only fixtures. Overridable so the defaults never reach a real deploy.
+    if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_TEST_SEED) {
+      throw new Error('Refusing to seed test users in production. Set ALLOW_TEST_SEED=1 to override.');
+    }
+    const userPass  = await bcrypt.hash(process.env.TEST_USER_PASSWORD  || 'pass@123',  10);
+    const adminPass = await bcrypt.hash(process.env.TEST_ADMIN_PASSWORD || 'Admin@123', 10);
 
     // ── 8 Test Users (2 per zone, status = approved) ──────────────────────────
     const testUsers = [

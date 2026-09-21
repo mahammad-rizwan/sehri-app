@@ -52,7 +52,7 @@ export async function registerForPushNotifications() {
 
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ||
-      Constants.expoConfig?.projectId ||
+      (Constants.expoConfig as any)?.projectId ||
       (Constants.expoConfig as any)?.manifest?.extra?.eas?.projectId ||
       (Constants.expoConfig?.updates?.url?.match(/\/projects\/([^/]+)$/)?.[1]);
 

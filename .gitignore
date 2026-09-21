@@ -21,3 +21,15 @@ ngrok.exe
 
 .idea/
 google-services.json
+
+# ── Secrets / local scratch (added after credential audit) ──
+abc.json
+*.key
+*.pem
+service-account*.json
+expo-debug.log
+check_pass.js
+check_user.js
+reset_pass.js
+update-password.js
+uploads/

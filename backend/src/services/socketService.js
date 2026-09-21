@@ -22,9 +22,9 @@ function setupSocket(httpServer) {
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       let user = null;
-      if (decoded.role === 'user') user = await User.findByPk(decoded.id);
-      else if (decoded.role === 'admin') user = await Admin.findByPk(decoded.id);
-      else if (decoded.role === 'super_admin') user = await SuperAdmin.findByPk(decoded.id);
+      if (decoded.role === 'user') user = await User.findByPk(decoded.userId);
+      else if (decoded.role === 'admin') user = await Admin.findByPk(decoded.userId);
+      else if (decoded.role === 'super_admin') user = await SuperAdmin.findByPk(decoded.userId);
 
       if (!user) return next(new Error('User not found'));
 

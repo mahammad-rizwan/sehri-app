@@ -26,13 +26,18 @@ const seed = async () => {
     });
 
     if (!existing) {
-      const hashedPassword = await bcrypt.hash(
-        process.env.SUPER_ADMIN_PASSWORD || 'Rizwan@2004',
-        10
-      );
+      // No hardcoded fallbacks — a seeded super admin with a known password is
+      // a backdoor into every zone. Fail loudly instead.
+      const { SUPER_ADMIN_PHONE, SUPER_ADMIN_PASSWORD, SUPER_ADMIN_NAME } = process.env;
+      if (!SUPER_ADMIN_PHONE || !SUPER_ADMIN_PASSWORD) {
+        throw new Error(
+          'SUPER_ADMIN_PHONE and SUPER_ADMIN_PASSWORD must be set in the environment before seeding.'
+        );
+      }
+      const hashedPassword = await bcrypt.hash(SUPER_ADMIN_PASSWORD, 10);
       await SuperAdmin.create({
-        name: process.env.SUPER_ADMIN_NAME || 'Rizwan',
-        phone: process.env.SUPER_ADMIN_PHONE || '9483384972',
+        name: SUPER_ADMIN_NAME || 'Super Admin',
+        phone: SUPER_ADMIN_PHONE,
         password: hashedPassword,
         is_phone_verified: true,
       });

@@ -1,5 +1,5 @@
 import { useRef, useMemo, useEffect, useState } from 'react';
-import { Tabs, useRouter, usePathname } from 'expo-router';
+import { Tabs, useRouter, usePathname, type Href } from 'expo-router';
 import {
   Text, View, StyleSheet, Animated, TouchableOpacity,
   BackHandler, Keyboard, Platform,
@@ -136,7 +136,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             });
             if (!isFocused && !event.defaultPrevented) navigation.navigate(name);
           } else {
-            router.push(`/(app)/${name}`);
+            router.push(`/(app)/${name}` as Href);
           }
         };
 

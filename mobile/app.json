@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Sehri Connect",
+    "name": "One Message",
     "slug": "sehri-connect",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -75,7 +75,7 @@
         {
           "android": {
             "googleServicesFile": "./google-services.json",
-            "usesCleartextTraffic": true,
+            "usesCleartextTraffic": false,
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
             "buildToolsVersion": "34.0.0"

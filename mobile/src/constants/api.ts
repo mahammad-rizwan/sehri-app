@@ -70,6 +70,10 @@ export const ENDPOINTS = {
   PUSH_LOCATION: (id: string) => `/tracking/${id}/push-location`,
   DELETE_RIDER: (id: string) => `/tracking/${id}`,
 
+  // Prayers
+  PRAYER_TIMINGS: '/prayers',
+  PRAYER_REFRESH: '/prayers/refresh',
+
   // Chat
   CHAT_GROUPS: '/chat/groups',
   CHAT_GROUP_DETAIL: (id: string) => `/chat/groups/${id}`,

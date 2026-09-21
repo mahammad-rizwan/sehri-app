@@ -24,12 +24,12 @@ One Message is a Ramzan/Sehri food distribution coordination app for Muslim stud
 | Real-time | Socket.IO |
 | Auth | JWT (7-day access token, 30-day refresh token) |
 | Push notifications | Expo Push via `exp.host` gateway (not raw FCM) |
-| OTP SMS | MessageCentral VerifyNow (Indian SMS, credentials: `C-6754BD9901EF45D`) |
-| Payments | Razorpay (UPI only) |
+| OTP SMS | MessageCentral VerifyNow (Indian SMS, credentials: `<your-messagecentral-customer-id>`) |
+| Donations | Manual UPI (QR + UPI ID) with screenshot proof, approved by super admin |
 | Prayer timings | AlAdhan API (Bangalore) |
-| Email receipts | Nodemailer (Gmail: `onemessage.support@gmail.com`) |
+| Proof storage | Cloudinary when configured, local disk fallback (`services/storageService.js`) |
 | Scheduled jobs | node-cron (10 PM / 5 AM / 9:50 AM IST) |
-| Public URL | ngrok static domain: `ungraded-reminder-booted.ngrok-free.dev` |
+| Public URL | Railway: `https://sehri-app-production.up.railway.app` |
 | Security | Helmet, CORS, compression, morgan, rate limiting |
 
 ### Mobile — React Native + Expo SDK 54 + TypeScript
@@ -39,7 +39,7 @@ One Message is a Ramzan/Sehri food distribution coordination app for Muslim stud
 | State management | Zustand (auth store) |
 | Token storage | expo-secure-store |
 | Real-time chat | Socket.IO client |
-| Payment checkout | react-native-webview (Razorpay HTML) |
+| Donation flow | Copy UPI ID / save QR, then upload payment screenshot |
 | Push notifications | expo-notifications |
 | Arabic font | IndopakNastaleeq.ttf |
 | Quran data | api.quran.com/api/v4 |
@@ -101,10 +101,13 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 - Users see the moving pin on embedded Google Maps WebView for their zone's active rider
 
 ### 4. Donations
-- Razorpay UPI-only checkout (WebView-embedded HTML)
-- Preset amounts: ₹50, 100, 200, 500, 1000, 2000 + custom input
+- Manual UPI: the app shows a UPI ID (tap to copy) and a QR code (savable to gallery)
+- User pays in their own UPI app, then uploads a payment screenshot as proof
+- Donation lands as `pending`; super admin reviews the proof and marks it `paid` (setting
+  the confirmed amount) or `rejected`
 - Optional anonymous mode — hides from history UI but stores real data for admin records
-- Email receipt sent automatically after payment
+- Proof images go to Cloudinary when credentials are set, local disk otherwise, and are
+  only ever served back through the authenticated `/donations/:id/proof` route
 - Total donated displayed on HomeScreen for all users
 - Super admin sees full donation history table with donor details + anonymous badge
 
@@ -144,7 +147,7 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 
 ---
 
-## All API Endpoints (42 total)
+## All API Endpoints (72 total)
 
 ### Auth `/api/auth`
 | Method | Path | Auth | Description |
@@ -194,11 +197,11 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 ### Donations `/api/donations`
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/create-order` | Any | Create Razorpay order |
-| POST | `/verify-payment` | Any | Verify payment signature |
+| POST | `/submit` | Any | Submit donation + proof image (multipart) |
+| PATCH | `/:id/status` | super_admin | Accept (`paid` + amount) or reject |
 | GET | `/history` | Any | Own donation history |
-| GET | `/summary` | Any | Total stats |
-| GET | `/all` | super_admin | Full donation history |
+| GET | `/summary` | admin/super_admin | Totals + full donation list |
+| GET | `/:id/proof` | admin/super_admin | Stream the proof image |
 
 ### Feedback `/api/feedback`
 | Method | Path | Auth | Description |
@@ -301,12 +304,12 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 ### `donations`
 | Field | Type | Notes |
 |---|---|---|
-| razorpay_order_id | VARCHAR(200) | Unique |
-| amount | DECIMAL(10,2) | |
-| status | ENUM(created, paid, failed, refunded) | |
-| donor_name, donor_phone, donor_email | | Always stored |
-| payment_method | VARCHAR(50) | upi / card / etc. |
-| is_anonymous | BOOLEAN | UI flag only; real data always stored |
+| amount | DECIMAL(10,2) | Null until the super admin confirms it |
+| status | ENUM(pending, paid, rejected) | |
+| donor_name, donor_phone, donor_zone | | Always stored |
+| message | TEXT | Optional note from the donor |
+| proof_url | VARCHAR(500) | Cloudinary URL, or `/uploads/...` on disk fallback |
+| is_anonymous | TINYINT | UI flag only; real data always stored |
 
 ### `chat_groups` + `chat_group_members` + `chat_messages`
 - Groups have a `created_by` (super_admin UUID)
@@ -383,7 +386,7 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 |---|---|
 | Provider | Expo Push (`exp.host/--/api/v2/push/send`) |
 | Token storage | `fcm_token` in users / admins / super_admins |
-| Deduplication | `[...new Set(tokens)]` before sending — handles multi-role users |
+| Deduplication | `[...new Set(tokens)]` in `notifyAllUsers` — one push per device for multi-role users |
 | Channel | `default` (Android HIGH importance, vibration, gold light) |
 | Scheduled (cron, IST) | 10:00 PM, 5:00 AM, 9:50 AM daily |
 | Poll toggle | Broadcast to all users when super admin opens/closes poll |
@@ -481,7 +484,7 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 | Zone filtering | Stats exclude entries with unknown/legacy zones — only counts the 4 known zones |
 | Voter address grouping | Voter lists grouped by PG address for easy distribution planning |
 | Anonymous donations | Real donor info **always stored** in DB regardless of `is_anonymous` flag — flag only affects UI display |
-| Donation signature | Razorpay HMAC-SHA256 verified on backend before marking as paid |
+| Donation approval | Super admin verifies the uploaded proof manually and sets the final amount when marking it paid |
 | Prayer fallback | Hardcoded fallback timings returned if AlAdhan API is unreachable |
 
 ---
@@ -490,13 +493,13 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 
 | Item | Status |
 |---|---|
-| Backend URL | ngrok static domain `ungraded-reminder-booted.ngrok-free.dev` — ngrok must be running on PC |
+| Backend URL | Railway `https://sehri-app-production.up.railway.app` (set in `mobile/src/constants/api.ts`) |
 | Start backend | Run `d:\Sehri app\start-backend.bat` — starts Node server + ngrok tunnel |
-| Razorpay keys | **Placeholder in `.env`** — fill in live keys from Razorpay Dashboard → Settings → API Keys |
-| Email receipts | Gmail credentials set in `.env` (`onemessage.support@gmail.com`) |
-| MC OTP | Switched to backup credentials `C-6754BD9901EF45D` / `Riz@2004` |
+| Cloudinary | **Not yet configured** — until `CLOUDINARY_URL` is set, donation proofs are written to Railway's ephemeral disk and lost on every redeploy |
+| Email receipts | Not implemented — the old `emailService.js` was dead code and has been removed |
+| MC OTP | Switched to backup credentials `<your-messagecentral-customer-id>` / `Riz@2004` |
 | New Architecture | Enabled (`newArchEnabled: true` in app.json) |
-| App name | "One Message" (EAS slug stays `sehri-connect` for project continuity) |
+| App name | "One Message" in `app.json`; EAS slug stays `sehri-connect` for project continuity |
 | Android package | `com.sehriconnect.app` (matches google-services.json — do not change) |
 | EAS owner | `rizwan866` |
 | Node version | v20.17.0 (EBADENGINE warnings are non-fatal for this project) |
@@ -511,7 +514,7 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 cd "d:\Sehri app\backend"
 node src/server.js
 ```
-Or double-click `d:\Sehri app\start-backend.bat` to start both Node and ngrok.
+The mobile app points at Railway, not localhost — change `mobile/src/constants/api.ts` to test against a local server.
 
 ### Mobile (development)
 ```bash
@@ -542,10 +545,20 @@ eas build --platform android --profile production
 | `JWT_REFRESH_SECRET / JWT_REFRESH_EXPIRES_IN` | Refresh token (30d) |
 | `MESSAGECENTRAL_CUSTOMER_ID` | MC account ID for OTP |
 | `MESSAGECENTRAL_PASSWORD` | MC account password |
-| `GOOGLE_MAPS_API_KEY` | Maps JavaScript API key |
-| `RAZORPAY_KEY_ID` | Razorpay live key ID |
-| `RAZORPAY_KEY_SECRET` | Razorpay live key secret |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to Firebase service-account.json |
-| `EMAIL_USER` | Gmail address for donation receipts |
-| `EMAIL_PASS` | Gmail App Password (16-char) |
-| `SUPER_ADMIN_PHONE / NAME / PASSWORD` | Initial super admin seed credentials |
+| `MESSAGECENTRAL_CUSTOMER_ID1 / PASSWORD1` | Optional backup OTP credentials, tried if the primary pair fails |
+| `CLOUDINARY_URL` | `cloudinary://key:secret@cloud` — donation proof storage |
+| `FRONTEND_URL` | CORS / Socket.IO origin in production |
+| `SUPER_ADMIN_PHONE / NAME / PASSWORD` | Super admin seed credentials — **required**, seeding now fails without them |
+
+---
+
+## Open Follow-ups (need action outside the codebase)
+
+| # | Item | Why it matters |
+|---|---|---|
+| 1 | **Rotate the agentrouter.org API key** that was in `abc.json` | The file has been deleted, but the key was sitting in the project folder in plaintext. Deleting it does not un-leak it — issue a new key and revoke the old one. |
+| 2 | **Rotate the MessageCentral password and super admin password** | Both used the same value, committed in plaintext across `RAILWAY-ENV-TEMPLATE.txt`, `RAILWAY-DEPLOYMENT.md`, `RAILWAY-QUICK-START.md`, `README.md` and `seed.js`. All copies are scrubbed, but treat the value as compromised. |
+| 3 | **Set `CLOUDINARY_URL` in Railway** | Until then donation proofs land on Railway's ephemeral disk and are wiped on every redeploy. The code already falls back to disk, so nothing breaks — the images just do not survive. |
+| 4 | **Confirm the Railway Root Directory** | `sehri-app/src/` and `sehri-app/backend/src/` are byte-identical duplicates, each with its own `package.json`, `Procfile` and `railway.json`. Both are currently kept in sync by hand. Check Railway → Service → Settings → Root Directory and delete the copy that is not used. |
+| 5 | **Restrict the Google Maps API key** | The key in `app.json` is a client key and will ship inside the APK. Lock it to `com.sehriconnect.app` + your release SHA-1 in Google Cloud Console → Credentials. |
+| 6 | **`usesCleartextTraffic` is now `false`** | The app talks to Railway over HTTPS. If you ever point `mobile/src/constants/api.ts` at a plain `http://` dev server, flip this back to `true` in `app.json` or the requests will be blocked on Android. |

@@ -8,7 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { COLORS, SIZES } from '../../../constants/theme';
+import { COLORS, SIZES, GradientColors } from '../../../constants/theme';
 import { useDuaSettings, ThemeKey, FontSizeKey } from '../../../store/duaSettingsStore';
 import { getCachedDuas, setCachedDuas, toggleBookmark, getBookmarks, DuaBookmark } from './duaStorage';
 
@@ -31,7 +31,7 @@ interface CategoryInfo {
   description: string;
 }
 
-const THEMES: Record<ThemeKey, { bg: string[]; card: string; text: string; secondary: string; border: string; surface: string; headerBg: string[] }> = {
+const THEMES: Record<ThemeKey, { bg: GradientColors; card: string; text: string; secondary: string; border: string; surface: string; headerBg: GradientColors }> = {
   dark: {
     bg: ['#050D16', '#0D1B2A', '#0A1A2E'],
     card: '#111E2E', text: '#E8E8E8', secondary: '#A0AAB5',
@@ -330,5 +330,6 @@ const styles = StyleSheet.create({
   fontRow: { flexDirection: 'row', gap: 10 },
   fontOption: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, borderWidth: 2 },
   fontOptionText: { fontWeight: '700' },
+  emptyText: { fontSize: SIZES.md },
   fontOptionSub: { fontSize: 10, marginTop: 2 },
 });

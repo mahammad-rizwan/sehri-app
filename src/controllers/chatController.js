@@ -325,10 +325,14 @@ const deleteMessage = async (req, res) => {
       return error(res, 'You can only delete your own messages', 403);
     }
 
+    // Captured before destroy — the group list uses it to tell whether the
+    // message it is showing as `last_message` is the one being removed.
+    const createdAt = msg.createdAt;
+
     await msg.destroy();
 
     try {
-      getIO().to(`group:${req.params.id}`).emit('delete-message', { msgId: req.params.msgId, groupId: req.params.id });
+      getIO().to(`group:${req.params.id}`).emit('delete-message', { msgId: req.params.msgId, groupId: req.params.id, createdAt });
     } catch (e) {
       logger.warn('Socket emit failed for delete-message:', e.message);
     }

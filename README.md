@@ -64,7 +64,7 @@ eas build --platform android --profile preview
 
 ### Super Admin
 - Phone: 9483384972
-- Password: Rizwan@2004
+- Password: (whatever you set in SUPER_ADMIN_PASSWORD)
 - Access: Tap moon logo 5× on welcome screen
 
 ---

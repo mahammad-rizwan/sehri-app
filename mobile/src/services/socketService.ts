@@ -51,7 +51,7 @@ export function listenNewMessage(callback: (msg: any) => void) {
   return () => socket?.off('new-message', callback);
 }
 
-export function listenDeleteMessage(callback: (data: { msgId: string; groupId: string }) => void) {
+export function listenDeleteMessage(callback: (data: { msgId: string; groupId: string; createdAt: string }) => void) {
   socket?.on('delete-message', callback);
   return () => socket?.off('delete-message', callback);
 }

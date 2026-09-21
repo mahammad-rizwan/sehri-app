@@ -24,10 +24,10 @@ JWT_REFRESH_EXPIRES_IN=30d
 # === MESSAGECENT (OTP) ===
 # Your current working credentials
 MESSAGECENTRAL_CUSTOMER_ID=C-B7A835D9FAAB450
-MESSAGECENTRAL_PASSWORD=Rizwan@2004
+MESSAGECENTRAL_PASSWORD=<your-messagecentral-password>
 
 # === GOOGLE MAPS ===
-GOOGLE_MAPS_API_KEY=AIzaSyAWQfQB0HfybB3h-yflpD1Dws6EuhY-8go
+GOOGLE_MAPS_API_KEY=<your-google-maps-api-key>
 
 # === RAZORPAY ===
 # ⚠️ SWITCH TO LIVE KEYS FOR PRODUCTION!
@@ -42,7 +42,7 @@ EMAIL_PASS=apdn xeya nhpv yzkc
 # === SUPER ADMIN ===
 SUPER_ADMIN_PHONE=9483384972
 SUPER_ADMIN_NAME=Rizwan
-SUPER_ADMIN_PASSWORD=Rizwan@2004
+SUPER_ADMIN_PASSWORD=<choose-a-strong-password>
 
 # === FIREBASE SERVICE ACCOUNT ===
 # ⚠️ IMPORTANT: Convert service-account.json to single-line string

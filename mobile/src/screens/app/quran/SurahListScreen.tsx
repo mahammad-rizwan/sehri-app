@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, SIZES } from '../../../constants/theme';
+import { COLORS, SIZES, GradientColors } from '../../../constants/theme';
 import { useQuranSettings, ThemeKey, FontSizeKey } from '../../../store/quranSettingsStore';
 
 const API_BASE = 'https://api.quran.com/api/v4';
@@ -30,7 +30,7 @@ interface Surah {
 
 let chapterCache: { data: Chapter[] } | null = null;
 
-const THEMES: Record<ThemeKey, { bg: string[]; card: string; text: string; secondary: string; border: string; surface: string }> = {
+const THEMES: Record<ThemeKey, { bg: GradientColors; card: string; text: string; secondary: string; border: string; surface: string }> = {
   dark: {
     bg: ['#050D16', '#0D1B2A', '#0A1A2E'],
     card: '#111E2E', text: '#E8E8E8', secondary: '#A0AAB5',
