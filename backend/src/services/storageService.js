@@ -172,16 +172,70 @@ async function saveDonationProof(file) {
   return saveToLocalDisk(file.buffer, file.originalname);
 }
 
-/** Logged once at boot so a misconfigured deploy is obvious immediately. */
-function reportStorageMode() {
+/**
+ * Verifies the credentials against Cloudinary's Admin API.
+ * Read-only — it lists at most one asset purely to check the cloud name and key
+ * actually belong together.
+ */
+function verifyCloudinary() {
   const cfg = getCloudinaryConfig();
-  if (cfg) {
-    logger.info(`🗂️  Donation proofs → Cloudinary (cloud: ${cfg.cloudName})`);
-  } else if (process.env.CLOUDINARY_URL) {
-    logger.error('🗂️  CLOUDINARY_URL is set but malformed — proofs will go to disk and be LOST on restart');
-  } else {
-    logger.warn('🗂️  CLOUDINARY_URL not set — donation proofs go to local disk and are LOST on restart');
+  if (!cfg) return Promise.resolve({ ok: false, reason: 'not configured' });
+
+  return new Promise((resolve) => {
+    const auth = Buffer.from(`${cfg.apiKey}:${cfg.apiSecret}`).toString('base64');
+    const req = https.request({
+      hostname: 'api.cloudinary.com',
+      path: `/v1_1/${cfg.cloudName}/resources/image?max_results=1`,
+      method: 'GET',
+      headers: { Authorization: `Basic ${auth}` },
+    }, (res) => {
+      let raw = '';
+      res.on('data', (c) => (raw += c));
+      res.on('end', () => {
+        if (res.statusCode === 200) return resolve({ ok: true });
+        let reason = raw.slice(0, 150);
+        try { reason = JSON.parse(raw)?.error?.message || reason; } catch { /* keep raw */ }
+        resolve({ ok: false, reason, status: res.statusCode });
+      });
+    });
+    req.on('error', (e) => resolve({ ok: false, reason: e.message }));
+    req.setTimeout(10000, () => { req.destroy(); resolve({ ok: false, reason: 'timed out' }); });
+    req.end();
+  });
+}
+
+/**
+ * Logged once at boot so a misconfigured deploy is obvious from the logs rather
+ * than from a donor hitting a failed submission.
+ */
+async function reportStorageMode() {
+  const cfg = getCloudinaryConfig();
+
+  if (!cfg) {
+    if (process.env.CLOUDINARY_URL) {
+      logger.error('🗂️  CLOUDINARY_URL is set but malformed. Expected: cloudinary://<api_key>:<api_secret>@<cloud_name>');
+    } else {
+      logger.warn('🗂️  CLOUDINARY_URL not set — donation proofs go to local disk and are LOST on restart');
+    }
+    return;
   }
+
+  const check = await verifyCloudinary();
+  if (check.ok) {
+    logger.info(`🗂️  Donation proofs → Cloudinary OK (cloud: ${cfg.cloudName})`);
+    return;
+  }
+
+  logger.error(`🗂️  Cloudinary REJECTED the credentials: ${check.reason}`);
+  if (/cloud_name mismatch/i.test(check.reason || '')) {
+    logger.error(
+      `🗂️  The api_key is valid but does not belong to cloud "${cfg.cloudName}". ` +
+      'Copy the exact Cloud Name from Cloudinary Dashboard → Product Environment Credentials.',
+    );
+  } else if (/unknown api_key/i.test(check.reason || '')) {
+    logger.error('🗂️  The api_key itself is not recognised — re-copy the whole CLOUDINARY_URL from the dashboard.');
+  }
+  logger.error('🗂️  Donation submissions will be REJECTED until this is fixed (proofs are never written to disk when Cloudinary is configured).');
 }
 
 /** Streams a remote proof image back through the caller's response. */
@@ -211,6 +265,7 @@ function streamRemoteProof(url, res) {
 module.exports = {
   saveDonationProof,
   reportStorageMode,
+  verifyCloudinary,
   streamRemoteProof,
   isCloudinaryEnabled,
   localUploadDir,
