@@ -149,6 +149,22 @@ export default function ProfileScreen() {
           <Text style={styles.quoteSource}>— Prophet Muhammad ﷺ</Text>
         </LinearGradient>
 
+        {/* Feedback — lives in the profile section */}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/feedback')}
+          style={styles.feedbackRow}
+          activeOpacity={0.7}
+        >
+          <View style={styles.feedbackIcon}>
+            <Text style={{ fontSize: 18 }}>💬</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Share Feedback</Text>
+            <Text style={styles.feedbackSub}>Tell your zone admin what's working and what isn't</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+        </TouchableOpacity>
+
         {/* Request profile changes — needs admin approval */}
         <GoldButton
           title="Request Profile Edit ✏️"
@@ -228,6 +244,18 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  feedbackRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.backgroundCard,
+    borderRadius: SIZES.radius.lg, borderWidth: 1, borderColor: COLORS.border,
+    padding: SIZES.spacing.base, marginBottom: SIZES.spacing.base,
+  },
+  feedbackIcon: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: 'rgba(201,168,76,0.14)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  feedbackSub: { color: COLORS.textMuted, fontSize: 11.5, marginTop: 2, lineHeight: 16 },
   actionHint: {
     color: COLORS.textMuted,
     fontSize: 11.5,

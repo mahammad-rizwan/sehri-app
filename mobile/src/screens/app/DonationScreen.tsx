@@ -260,9 +260,39 @@ export default function DonationScreen() {
             </Text>
           </LinearGradient>
 
-          {/* ── Your Details ── */}
+          {/* ── Step 1: Pay ── */}
           <PremiumCard style={st.card}>
-            <Text style={st.cardTitle}>Your Details</Text>
+            <View style={st.stepRow}>
+              <View style={st.stepBadge}><Text style={st.stepNum}>1</Text></View>
+              <Text style={st.cardTitle}>Pay via UPI</Text>
+            </View>
+
+            <Text style={st.label}>Pay to UPI ID</Text>
+            <TouchableOpacity style={st.upiBox} onPress={copyUpiId} activeOpacity={0.8}>
+              <Text style={[st.upiText, { flex: 1 }]}>{UPI_ID}</Text>
+              <View style={st.copyBtn}>
+                <Ionicons name="copy-outline" size={16} color={COLORS.textOnPrimary} />
+                <Text style={st.copyText}>Copy</Text>
+              </View>
+            </TouchableOpacity>
+            <Text style={st.helperText}>Tap to copy the UPI ID</Text>
+
+            <Text style={st.label}>Or scan the QR code</Text>
+            <View style={st.qrWrap}>
+              <Image source={QR_IMAGE} style={st.qrImage} resizeMode="contain" />
+            </View>
+            <TouchableOpacity style={st.downloadBtn} onPress={downloadQr} activeOpacity={0.8}>
+              <Ionicons name="download-outline" size={18} color={COLORS.primary} />
+              <Text style={st.downloadText}>Save QR Code</Text>
+            </TouchableOpacity>
+          </PremiumCard>
+
+          {/* ── Step 2: Tell us about it ── */}
+          <PremiumCard style={st.card}>
+            <View style={st.stepRow}>
+              <View style={st.stepBadge}><Text style={st.stepNum}>2</Text></View>
+              <Text style={st.cardTitle}>Your Details</Text>
+            </View>
 
             <Text style={st.label}>Name</Text>
             <TextInput
@@ -310,33 +340,12 @@ export default function DonationScreen() {
             />
           </PremiumCard>
 
-          {/* ── Payment ── */}
+          {/* ── Step 3: Proof ── */}
           <PremiumCard style={st.card}>
-            <Text style={st.cardTitle}>Payment</Text>
-
-            <Text style={st.label}>Pay to UPI ID</Text>
-            <TouchableOpacity style={st.upiBox} onPress={copyUpiId} activeOpacity={0.8}>
-              <Text style={[st.upiText, { flex: 1 }]}>{UPI_ID}</Text>
-              <View style={st.copyBtn}>
-                <Ionicons name="copy-outline" size={16} color={COLORS.textOnPrimary} />
-                <Text style={st.copyText}>Copy</Text>
-              </View>
-            </TouchableOpacity>
-            <Text style={st.helperText}>Tap to copy the UPI ID</Text>
-
-            <Text style={st.label}>Or scan the QR code</Text>
-            <View style={st.qrWrap}>
-              <Image source={QR_IMAGE} style={st.qrImage} resizeMode="contain" />
+            <View style={st.stepRow}>
+              <View style={st.stepBadge}><Text style={st.stepNum}>3</Text></View>
+              <Text style={st.cardTitle}>Upload Payment Proof <Text style={st.required}>*</Text></Text>
             </View>
-            <TouchableOpacity style={st.downloadBtn} onPress={downloadQr} activeOpacity={0.8}>
-              <Ionicons name="download-outline" size={18} color={COLORS.primary} />
-              <Text style={st.downloadText}>Save QR Code</Text>
-            </TouchableOpacity>
-          </PremiumCard>
-
-          {/* ── Proof Upload ── */}
-          <PremiumCard style={st.card}>
-            <Text style={st.cardTitle}>Upload Payment Proof <Text style={st.required}>*</Text></Text>
             <Text style={st.helperText}>Screenshot of the payment confirmation (PNG/JPEG/JPG only)</Text>
 
             {proofUri ? (
@@ -374,6 +383,13 @@ export default function DonationScreen() {
 }
 
 const st = StyleSheet.create({
+  stepRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: SIZES.spacing.sm },
+  stepBadge: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepNum:   { color: COLORS.textOnPrimary, fontSize: 12, fontWeight: '800' },
   container:   { flex: 1 },
   topBar:      { justifyContent: 'flex-end', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border, backgroundColor: COLORS.background },
   topBarContent: { flexDirection: 'row', alignItems: 'center', height: Platform.OS === 'ios' ? 44 : 56, paddingHorizontal: 4 },

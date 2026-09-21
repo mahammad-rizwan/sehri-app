@@ -131,7 +131,12 @@ components — no injected JS or `postMessage` bridge.
 - Users see the moving pin on embedded Google Maps WebView for their zone's active rider
 
 ### 4. Donations
-- Manual UPI: the app shows a UPI ID (tap to copy) and a QR code (savable to gallery)
+Presented as three numbered steps, in the order the donor actually works through:
+
+1. **Pay via UPI** — copiable UPI ID, then the QR code with a "Save QR Code" button
+2. **Your Details** — name (or donate anonymously), amount paid, optional message
+3. **Upload Payment Proof** — the payment screenshot — then Submit
+
 - User pays in their own UPI app, then uploads a payment screenshot as proof
 - Donation lands as `pending`; super admin reviews the proof and marks it `paid` (setting
   the confirmed amount) or `rejected`
@@ -184,9 +189,18 @@ components — no injected JS or `postMessage` bridge.
   `tracking.rider_password`).
 
 ### 9. Feedback
-- Users submit with category (food_quality/distribution/suggestion/complaint/general) + optional 1–5 star rating
-- Admins see all feedback, mark read/unread
-- Users can view their own submission history
+Lives in **Profile → Share Feedback** (moved off the Home screen), with two tabs:
+
+- **Write** — category chips (general / food_quality / distribution / suggestion /
+  complaint) each with a one-line hint about what belongs there, an optional 1–5
+  star rating with a Clear option, and a message box with a live `n/1000`
+  counter and the 5-character minimum surfaced inline. The placeholder adapts to
+  the chosen category.
+- **My Feedback** — the user's own history, each entry tagged
+  **✓ Seen by admin** or **⏳ Awaiting review**. This closes the loop so people
+  know they were actually heard. (`GET /feedback/my` existed but had no UI.)
+
+Admins see all feedback and mark it read/unread as before.
 
 ### 10. Poll History (Admin)
 - Calendar view — dates where a poll exists are highlighted in gold
@@ -194,7 +208,7 @@ components — no injected JS or `postMessage` bridge.
 
 ---
 
-## All API Endpoints (74 total)
+## All API Endpoints (80 total)
 
 ### Auth `/api/auth`
 | Method | Path | Auth | Description |
@@ -288,6 +302,15 @@ components — no injected JS or `postMessage` bridge.
 | POST | `/groups/:id/read` | Member | Mark group as read |
 | GET | `/admins` | super_admin | List admins for group creation |
 
+### Sync `/api/sync`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/versions` | Any | Content cache versions — clients bust their cache when these change |
+| GET | `/status` | super_admin | State of all three sync sources |
+| POST | `/prayers` | super_admin | Force re-fetch from AlAdhan (overwrites today) |
+| POST | `/quran` | super_admin | Bump Quran content version |
+| POST | `/dua` | super_admin | Bump Dua content version |
+
 ### Prayers `/api/prayers`
 | Method | Path | Auth | Description |
 |---|---|---|---|
@@ -296,7 +319,36 @@ components — no injected JS or `postMessage` bridge.
 
 ---
 
-## Database Models (13 Tables)
+## Sync Data (Super Admin)
+
+Dashboard → **Sync Data**, three tabs, each showing when it last synced, who
+triggered it, and whether it succeeded.
+
+| Tab | Where the data lives | Automatic? | What Force Sync does |
+|---|---|---|---|
+| 🕌 **Namaz** | Server (`prayer_timings`) | Yes — AlAdhan, daily 00:05 IST | Re-fetches today's timings and **overwrites** the stored row |
+| 📖 **Quran** | Each device's AsyncStorage, from api.quran.com | No — content is static | Bumps a version so every device rebuilds its cached copy |
+| 🤲 **Dua** | Each device's AsyncStorage | No — content is static | Same as Quran |
+
+**Why the version counter.** Quran and Dua content is cached on each phone, so
+the server cannot clear it directly. The super admin bumps `sync_state.version`;
+every client compares it on login/launch and rebuilds its own cache when it
+differs. That is what makes the sync button actually fix *other people's* broken
+apps rather than only the admin's. Bookmarks, reading position and reader
+settings are never touched — only the content cache keys are cleared.
+
+**Prayer timings honesty.** The nightly cron silently falls back to a local
+calculation when AlAdhan is unreachable, and those figures are approximate. The
+panel now reports which source was actually used, so a forced sync once the
+connection is back replaces them with real API values.
+
+> Note: `fetchAndSavePrayerTimings()` previously returned early if today's row
+> existed, which made the old `POST /prayers/refresh` a no-op. It now takes a
+> `force` flag and updates the row in place.
+
+---
+
+## Database Models (14 Tables)
 
 ### `users`
 | Field | Type | Notes |
@@ -386,6 +438,14 @@ components — no injected JS or `postMessage` bridge.
 ### `profile_edit_requests`
 - requested_changes (JSON), status (pending/approved/rejected), reviewed_by, rejection_reason
 
+### `sync_state`
+| Field | Notes |
+|---|---|
+| key | PK — `prayers` / `quran` / `dua` |
+| version | Bumped on content sync; clients bust their cache when it changes |
+| last_synced_at, last_synced_by | `by` is a super admin name, or `system (scheduled)` |
+| last_status, last_detail | `success`/`failed`, plus which source the data came from |
+
 ### `otps`
 - phone, otp (verificationId from MC), purpose, is_used, expires_at
 
@@ -413,7 +473,7 @@ components — no injected JS or `postMessage` bridge.
 | 6 | Profile | — | — |
 
 ### Sub-screens (no tab bar)
-- `/(app)/feedback` — Submit feedback
+- `/(app)/feedback` — Feedback form + own history (reached from Profile)
 - `/(app)/poll-history` — User's own poll history
 - `/(app)/rider` — Rider GPS broadcast screen
 - `/(app)/dua/category/[id]` — Dua category

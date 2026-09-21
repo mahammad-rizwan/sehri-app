@@ -24,6 +24,7 @@ const feedbackRoutes = require('./routes/feedback');
 const trackingRoutes = require('./routes/tracking');
 const chatRoutes = require('./routes/chat');
 const prayerRoutes = require('./routes/prayers');
+const syncRoutes = require('./routes/sync');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -66,6 +67,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/prayers', prayerRoutes);
+app.use('/api/sync', syncRoutes);
 
 // ─────────────── 404 Handler ───────────────
 app.use((req, res) => {
@@ -105,10 +107,21 @@ function scheduleReminders() {
 
 function schedulePrayerTimings() {
   cron.schedule('5 0 * * *', async () => {
+    const { SyncState } = require('./models');
     try {
-      await fetchAndSavePrayerTimings();
+      const rec = await fetchAndSavePrayerTimings();
+      await SyncState.record('prayers', {
+        by: 'system (scheduled)',
+        status: 'success',
+        detail: rec?.dataValues?.__source === 'AlAdhan API'
+          ? 'Fetched from AlAdhan API'
+          : 'AlAdhan unreachable — used local calculation (approximate)',
+      });
     } catch (err) {
       logger.error('Prayer timing cron error:', err.message);
+      await SyncState.record('prayers', {
+        by: 'system (scheduled)', status: 'failed', detail: err.message,
+      }).catch(() => {});
     }
   }, { scheduled: true, timezone: 'Asia/Kolkata' });
   logger.info('🕌 Prayer timing fetch scheduled (daily at 00:05 IST)');

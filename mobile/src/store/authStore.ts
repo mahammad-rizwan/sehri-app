@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import api from '../services/api';
 import { ENDPOINTS } from '../constants/api';
 import { registerForPushNotifications } from '../services/notificationService';
+import { reconcileContentVersions } from '../services/contentSync';
 
 export interface User {
   id: string;
@@ -112,6 +113,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
       registerForPushNotifications().catch(err => console.warn('[Push] Registration error (initialize):', err));
+      // Rebuilds the Quran/Dua cache if a super admin has triggered a sync.
+      reconcileContentVersions();
     } catch {
       await api.clearTokens();
       set({ user: null, userRole: null, activeRole: null, isAuthenticated: false, isLoading: false });
@@ -135,6 +138,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isAuthenticated: true,
     });
     registerForPushNotifications().catch(err => console.warn('[Push] Registration error (login):', err));
+    reconcileContentVersions();
     return data.data.user;
   },
 

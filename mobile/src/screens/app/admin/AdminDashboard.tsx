@@ -259,6 +259,7 @@ export default function AdminDashboard() {
                 <AdminAction icon="🛵" title="Riders" color={COLORS.accentGreen} onPress={() => router.push('/(app)/admin/tracking' as any)} />
                 <AdminAction icon="💬" title="Chat" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/chat' as any)} />
                 <AdminAction icon="👤" title="Manage Admins" color="#FF6B35" onPress={() => router.push('/(app)/admin/manage-admins' as any)} />
+                <AdminAction icon="🔄" title="Sync Data" color={COLORS.accent} onPress={() => router.push('/(app)/admin/sync-data' as any)} />
               </>
             ) : (
               <>

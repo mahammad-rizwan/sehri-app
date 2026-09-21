@@ -576,7 +576,6 @@ export default function HomeScreen() {
             <ActionCard icon="🤲" title="Duas" subtitle="Daily supplications" color="#8B5CF6" onPress={() => router.push('/(app)/dua' as any)} />
             <ActionCard icon="🛵" title="Live Track" subtitle="Track your rider" color={COLORS.accent} onPress={() => router.push('/(app)/tracking')} />
             <ActionCard icon="🎁" title="Donate" subtitle="Support Sehri" color={COLORS.accentGreen} onPress={() => router.push('/(app)/donation')} />
-            <ActionCard icon="💬" title="Feedback" subtitle="Share thoughts" color={COLORS.accentOrange} onPress={() => router.push('/(app)/feedback')} />
           </View>
 
           <LinearGradient colors={['rgba(26,10,46,0.8)', 'rgba(10,10,30,0.9)']} style={styles.ramzanBanner}>

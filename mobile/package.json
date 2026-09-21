@@ -10,7 +10,10 @@
     "ios": "expo run:ios",
     "build:preview": "eas build --platform android --profile preview",
     "build:debug": "eas build --platform android --profile debug-apk",
-    "build:prod": "eas build --platform android --profile production"
+    "build:prod": "eas build --platform android --profile production",
+    "emulator:start": "powershell -ExecutionPolicy Bypass -File ./emulator-helper.ps1 start",
+    "emulator:fix": "powershell -ExecutionPolicy Bypass -File ./emulator-helper.ps1 fix", 
+    "emulator:status": "powershell -ExecutionPolicy Bypass -File ./emulator-helper.ps1 status"
   },
   "dependencies": {
     "@expo/vector-icons": "15.0.3",

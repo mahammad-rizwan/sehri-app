@@ -77,6 +77,13 @@ export const ENDPOINTS = {
   PRAYER_TIMINGS: '/prayers',
   PRAYER_REFRESH: '/prayers/refresh',
 
+  // Sync (super admin panel + client cache busting)
+  SYNC_STATUS: '/sync/status',
+  SYNC_VERSIONS: '/sync/versions',
+  SYNC_PRAYERS: '/sync/prayers',
+  SYNC_QURAN: '/sync/quran',
+  SYNC_DUA: '/sync/dua',
+
   // Chat
   CHAT_GROUPS: '/chat/groups',
   CHAT_GROUP_DETAIL: (id: string) => `/chat/groups/${id}`,

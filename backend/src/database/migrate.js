@@ -88,6 +88,37 @@ const migrate = async () => {
       } else throw err;
     }
 
+    // 4c. sync_state — tracks last sync + cache version per data source
+    try {
+      await queryInterface.createTable('sync_state', {
+        key:            { type: DataTypes.STRING(32), primaryKey: true },
+        version:        { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+        last_synced_at: { type: DataTypes.DATE, allowNull: true },
+        last_synced_by: { type: DataTypes.STRING(100), allowNull: true },
+        last_status:    { type: DataTypes.ENUM('success', 'failed'), allowNull: true },
+        last_detail:    { type: DataTypes.TEXT, allowNull: true },
+        created_at:     { type: DataTypes.DATE, allowNull: false, defaultValue: sequelize.literal('CURRENT_TIMESTAMP') },
+        updated_at:     { type: DataTypes.DATE, allowNull: false, defaultValue: sequelize.literal('CURRENT_TIMESTAMP') },
+      });
+      logger.info('✅ Created sync_state table');
+    } catch (err) {
+      if (err.parent?.code === 'ER_TABLE_EXISTS_ERROR') {
+        logger.info('ℹ️ sync_state table already exists');
+      } else throw err;
+    }
+
+    // Seed the three known sources so the panel never renders empty
+    for (const key of ['prayers', 'quran', 'dua']) {
+      try {
+        await sequelize.query(
+          'INSERT IGNORE INTO sync_state (`key`, version, created_at, updated_at) VALUES (?, 1, NOW(), NOW())',
+          { replacements: [key] }
+        );
+      } catch (err) {
+        logger.warn(`Could not seed sync_state row ${key}: ${err.message}`);
+      }
+    }
+
     // 5. Update zone ENUM for users - MySQL can't alter ENUM directly in Sequelize easily
     try {
       await sequelize.query(

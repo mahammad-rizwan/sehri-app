@@ -74,12 +74,16 @@ async function computeLocalTimings() {
   return { timings, hijri: `${parts.day} ${parts.month} ${parts.year} AH` };
 }
 
-async function fetchAndSavePrayerTimings() {
+async function fetchAndSavePrayerTimings(force = false) {
   try {
     const dateStr = getISTDate();
 
     const existing = await PrayerTiming.findOne({ where: { date: dateStr } });
-    if (existing) return existing;
+    // Without `force` this returned the cached row, which made the refresh
+    // endpoint a no-op. It matters because the nightly cron silently falls back
+    // to local calculation when AlAdhan is unreachable — a forced sync is the
+    // only way to replace those figures with the real API ones.
+    if (existing && !force) return existing;
 
     let data = null;
     let source = 'local calculation';
@@ -113,16 +117,26 @@ async function fetchAndSavePrayerTimings() {
 
     const tahajjudTime = calculateTahajjud(timings);
 
-    const record = await PrayerTiming.create({
+    const values = {
       date: dateStr,
       city: CITY,
       country: COUNTRY,
       timings: JSON.stringify(timings),
       tahajjud_time: tahajjudTime,
       date_hijri: hijri,
-    });
+    };
+
+    let record;
+    if (existing) {
+      record = await existing.update(values);
+    } else {
+      record = await PrayerTiming.create(values);
+    }
 
     logger.info(`Prayer timings saved for ${dateStr} (${source})`);
+    // Callers (the sync panel) need to know whether this came from the API or
+    // the offline fallback.
+    record.dataValues.__source = source;
     return record;
   } catch (err) {
     logger.error('fetchAndSavePrayerTimings error:', err.message);
