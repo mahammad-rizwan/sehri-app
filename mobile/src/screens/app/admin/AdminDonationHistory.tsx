@@ -11,6 +11,7 @@ import { IslamicGeometric } from '../../../components/ui/IslamicPattern';
 import api from '../../../services/api';
 import { ENDPOINTS, API_BASE_URL } from '../../../constants/api';
 import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system/legacy';
 import Toast from 'react-native-toast-message';
 import { useAuthStore } from '../../../store/authStore';
 
@@ -64,9 +65,9 @@ export default function AdminDonationHistory() {
 
   // Proof modal
   const [proofVisible, setProofVisible] = useState(false);
-  const [proofData,    setProofData]    = useState<{ name: string; url: string; token: string } | null>(null);
+  const [proofData,    setProofData]    = useState<{ id: string; name: string; uri: string | null } | null>(null);
   const [proofLoading, setProofLoading] = useState(false);
-  const [proofError,   setProofError]   = useState(false);
+  const [proofError,   setProofError]   = useState<string | null>(null);
 
   // Accept amount modal
   const [amountVisible,  setAmountVisible]  = useState(false);
@@ -186,19 +187,47 @@ export default function AdminDonationHistory() {
     setAmountInput('');
   };
 
+  /**
+   * Downloads the proof to a cache file first, then shows that local file.
+   *
+   * Handing <Image> an authenticated URL and relying on its `headers` support
+   * is fragile across platforms and fails silently when it does not work.
+   * Fetching it ourselves always works and, just as importantly, gives us the
+   * real HTTP status when something goes wrong.
+   */
   const openProof = async (d: Donation) => {
     if (!d.proof_url) { Toast.show({ type: 'info', text1: 'No proof uploaded' }); return; }
-    // The proof route is admin-authenticated, and <Image> does not go through
-    // the axios interceptor, so the token has to be attached by hand.
+
     const token = await SecureStore.getItemAsync('accessToken');
     if (!token) { Toast.show({ type: 'error', text1: 'Session expired — please log in again' }); return; }
-    setProofData({
-      name: d.donor_name,
-      url: `${API_BASE_URL}${ENDPOINTS.DONATION_PROOF(d.id)}`,
-      token,
-    });
+
+    setProofData({ id: d.id, name: d.donor_name, uri: null });
+    setProofError(null);
     setProofLoading(true);
     setProofVisible(true);
+
+    try {
+      const dest = `${FileSystem.cacheDirectory}proof-${d.id}.jpg`;
+      const res = await FileSystem.downloadAsync(
+        `${API_BASE_URL}${ENDPOINTS.DONATION_PROOF(d.id)}`,
+        dest,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (res.status === 200) {
+        setProofData({ id: d.id, name: d.donor_name, uri: res.uri });
+      } else if (res.status === 401) {
+        setProofError('Your session expired. Log out and back in, then try again.');
+      } else if (res.status === 404) {
+        setProofError('This proof is no longer on the server. Proofs uploaded before Cloudinary was configured were lost on redeploy.');
+      } else {
+        setProofError(`The server returned ${res.status} while fetching this proof.`);
+      }
+    } catch (err: any) {
+      setProofError(err?.message || 'Could not download the proof.');
+    } finally {
+      setProofLoading(false);
+    }
   };
 
   const zl = (z: string) => (ZONE_CONFIG as any)[z]?.label || z;
@@ -482,7 +511,7 @@ export default function AdminDonationHistory() {
       </Modal>
 
       {/* ── Proof Modal ── */}
-      <Modal visible={proofVisible} animationType="fade" transparent onRequestClose={() => { setProofVisible(false); setProofError(false); }}>
+      <Modal visible={proofVisible} animationType="fade" transparent onRequestClose={() => { setProofVisible(false); setProofError(null); }}>
         <View style={st.overlay}>
           <View style={st.proofModal}>
             <View style={st.modalHdr}>
@@ -492,48 +521,33 @@ export default function AdminDonationHistory() {
               </TouchableOpacity>
             </View>
             <Text style={st.modalSub}>{proofData?.name}</Text>
-            {proofData && (
+            {proofLoading ? (
+              <View style={st.proofFallback}>
+                <ActivityIndicator color={COLORS.primary} size="large" />
+                <Text style={st.proofFallbackSub}>Loading proof…</Text>
+              </View>
+            ) : proofError ? (
+              <View style={st.proofFallback}>
+                <Text style={{ fontSize: 34 }}>🖼️</Text>
+                <Text style={st.proofFallbackTitle}>Could not load the proof</Text>
+                {/* The real reason, not a generic message — this is what makes
+                    a failure diagnosable instead of a blank box. */}
+                <Text style={st.proofFallbackSub}>{proofError}</Text>
+                <TouchableOpacity
+                  onPress={() => { const d = donations.find(x => x.id === proofData?.id); if (d) openProof(d); }}
+                  style={st.retryBtn}
+                  activeOpacity={0.8}
+                >
+                  <Text style={st.retryTxt}>Try again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : proofData?.uri ? (
               <ScrollView contentContainerStyle={{ alignItems: 'center' }}>
-                {proofError ? (
-                  <View style={st.proofFallback}>
-                    <Text style={{ fontSize: 34 }}>🖼️</Text>
-                    <Text style={st.proofFallbackTitle}>Could not load the proof</Text>
-                    <Text style={st.proofFallbackSub}>
-                      Check your connection and try again. Proofs uploaded before Cloudinary
-                      was configured were stored on the server's temporary disk and are gone.
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => { setProofError(false); setProofLoading(true); }}
-                      style={st.retryBtn}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={st.retryTxt}>Try again</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={st.proofBox}>
-                    {/* The image must keep its real size at all times. Collapsing
-                        it to height 0 while loading stops RN laying it out, so it
-                        never decodes and onLoadEnd never fires — the spinner then
-                        spins forever. Overlay the spinner instead. */}
-                    <Image
-                      source={{ uri: proofData.url, headers: { Authorization: `Bearer ${proofData.token}` } }}
-                      style={st.proofImg}
-                      resizeMode="contain"
-                      onLoadStart={() => setProofLoading(true)}
-                      onLoadEnd={() => setProofLoading(false)}
-                      onError={() => { setProofLoading(false); setProofError(true); }}
-                    />
-                    {proofLoading && (
-                      <View style={st.proofSpinner} pointerEvents="none">
-                        <ActivityIndicator color={COLORS.primary} size="large" />
-                        <Text style={st.proofSpinnerTxt}>Loading proof…</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
+                {/* A local cache file — no auth headers needed, so nothing can
+                    silently fail in the image loader. */}
+                <Image source={{ uri: proofData.uri }} style={st.proofImg} resizeMode="contain" />
               </ScrollView>
-            )}
+            ) : null}
           </View>
         </View>
       </Modal>

@@ -68,20 +68,46 @@ export default function UserManagement() {
   useEffect(() => { loadUsers(1); }, [statusFilter, zoneFilter]);
 
   const activeFilterCount = zoneFilter !== 'all' ? 1 : 0;
+  const [rejectFor, setRejectFor] = useState<string | null>(null);
+  const [remark,    setRemark]    = useState('');
+
+  const applyStatus = async (userId: string, status: string, remark?: string) => {
+    try {
+      setActionLoading(userId + status);
+      await api.patch(ENDPOINTS.USER_STATUS(userId), {
+        status,
+        ...(status === 'rejected' ? { rejection_reason: remark?.trim() || undefined } : {}),
+      });
+      Toast.show({
+        type: 'success',
+        text1: 'User ' + status,
+        text2: status === 'rejected'
+          ? 'They will see your remark at login and can resubmit.'
+          : undefined,
+      });
+      setSelectedUser(null);
+      setRejectFor(null);
+      setRemark('');
+      loadUsers(1);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Action failed' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleStatus = async (userId: string, status: string) => {
-    const label = status === 'approved' ? 'Approve' : status === 'rejected' ? 'Reject' : 'Set Pending';
+    // Rejecting opens the remark sheet — a rejection without a reason leaves the
+    // applicant with nothing to act on.
+    if (status === 'rejected') {
+      setRemark('');
+      setRejectFor(userId);
+      return;
+    }
+    const label = status === 'approved' ? 'Approve' : 'Set Pending';
     Alert.alert(label + ' User', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm', style: status === 'rejected' ? 'destructive' : 'default', onPress: async () => {
-        try {
-          setActionLoading(userId + status);
-          await api.patch(ENDPOINTS.USER_STATUS(userId), { status });
-          Toast.show({ type: 'success', text1: 'User ' + status });
-          setSelectedUser(null); loadUsers(1);
-        } catch { Toast.show({ type: 'error', text1: 'Action failed' }); }
-        finally { setActionLoading(null); }
-      }},
+      { text: 'Confirm', onPress: () => applyStatus(userId, status) },
     ]);
   };
 
@@ -337,11 +363,87 @@ export default function UserManagement() {
           </LinearGradient>
         </View>
       </Modal>
+
+      {/* Rejection remark — the applicant sees this at login */}
+      <Modal visible={!!rejectFor} transparent animationType="fade" onRequestClose={() => setRejectFor(null)}>
+        <View style={u.remarkBg}>
+          <View style={u.remarkCard}>
+            <Text style={u.remarkTitle}>Reject Registration</Text>
+            <Text style={u.remarkNote}>
+              Tell them what to fix. They will see this the next time they log in, and can
+              correct their details and resubmit for approval.
+            </Text>
+
+            <TextInput
+              style={u.remarkInput}
+              value={remark}
+              onChangeText={setRemark}
+              placeholder="e.g. Your PG address does not match the zone you selected."
+              placeholderTextColor={COLORS.textMuted}
+              multiline
+              maxLength={300}
+            />
+            <Text style={u.remarkCount}>{remark.length}/300</Text>
+
+            {/* Common reasons, so admins are not typing the same thing daily */}
+            <View style={u.presetRow}>
+              {[
+                'Address does not match your zone.',
+                'Name does not match your college ID.',
+                'Details are incomplete.',
+              ].map((t) => (
+                <TouchableOpacity key={t} onPress={() => setRemark(t)} style={u.preset} activeOpacity={0.8}>
+                  <Text style={u.presetTxt}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={u.remarkActions}>
+              <TouchableOpacity style={[u.remarkBtn, u.remarkCancel]} onPress={() => setRejectFor(null)} activeOpacity={0.85}>
+                <Text style={u.remarkCancelTxt}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[u.remarkBtn, u.remarkConfirm, !remark.trim() && { opacity: 0.5 }]}
+                disabled={!remark.trim() || !!actionLoading}
+                onPress={() => rejectFor && applyStatus(rejectFor, 'rejected', remark)}
+                activeOpacity={0.85}
+              >
+                <Text style={u.remarkConfirmTxt}>Reject & Notify</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
 
 const u = StyleSheet.create({
+  remarkBg:    { flex: 1, backgroundColor: 'rgba(0,0,0,0.72)', justifyContent: 'center', padding: 22 },
+  remarkCard:  {
+    backgroundColor: COLORS.backgroundCard, borderRadius: SIZES.radius.lg,
+    borderWidth: 1, borderColor: COLORS.border, padding: SIZES.spacing.lg,
+  },
+  remarkTitle: { color: COLORS.textPrimary, fontSize: 17, fontWeight: '700' },
+  remarkNote:  { color: COLORS.textSecondary, fontSize: 12.5, lineHeight: 19, marginTop: 8 },
+  remarkInput: {
+    backgroundColor: COLORS.backgroundSecondary, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: SIZES.radius.md, color: COLORS.textPrimary,
+    padding: 12, fontSize: 14, marginTop: 14, minHeight: 84, textAlignVertical: 'top',
+  },
+  remarkCount: { color: COLORS.textMuted, fontSize: 10.5, textAlign: 'right', marginTop: 4 },
+  presetRow:   { gap: 6, marginTop: 10 },
+  preset:      {
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 7, backgroundColor: COLORS.backgroundSecondary,
+  },
+  presetTxt:   { color: COLORS.textSecondary, fontSize: 11.5 },
+  remarkActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  remarkBtn:     { flex: 1, paddingVertical: 11, borderRadius: SIZES.radius.md, alignItems: 'center', borderWidth: 1 },
+  remarkCancel:  { borderColor: COLORS.border },
+  remarkCancelTxt: { color: COLORS.textSecondary, fontSize: 13.5, fontWeight: '600' },
+  remarkConfirm: { borderColor: '#EF5350', backgroundColor: 'rgba(239,83,80,0.16)' },
+  remarkConfirmTxt: { color: '#EF5350', fontSize: 13.5, fontWeight: '700' },
   container: { flex: 1 },
   // Header
   header: { paddingTop: 12, paddingHorizontal: 20, paddingBottom: 10 },

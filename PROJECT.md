@@ -88,6 +88,13 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
   replayed as an access or refresh token anywhere else in the API. `PATCH
   /auth/pending-registration` refuses it once the account leaves `pending`, and
   phone number and status are not editable through it.
+- **Rejection is a round trip, not a dead end.** Rejecting a user opens a remark
+  sheet (with common presets); the remark is stored on `users.rejection_reason`
+  and pushed to them. At login the rejected applicant sees the remark, taps
+  **Fix My Details & Resubmit**, corrects their details with no new OTP, and the
+  account returns to `pending` with the remark cleared. Reviewers get a
+  "Registration Resubmitted" push. Approving or reverting to pending also clears
+  the remark, so a stale reason is never shown.
 - Profile edit requests (after approval) still require admin approval
 - Pending approval overlay shows zone admin contact number
 
@@ -245,7 +252,7 @@ Admins see all feedback and mark it read/unread as before.
 |---|---|---|---|
 | GET | `/me` | Any | Get own profile |
 | GET | `/` | admin/super_admin | List users (admin: own zone) |
-| PATCH | `/:id/status` | admin/super_admin | Approve/reject user |
+| PATCH | `/:id/status` | admin/super_admin | Approve/reject user (`rejection_reason` on reject) |
 | DELETE | `/:id` | admin/super_admin | Delete user |
 | POST | `/request-profile-edit` | user | Request profile change — sets account back to `pending` |
 | POST | `/change-password` | user/admin/super_admin | Change own password — no approval, no OTP |
@@ -374,6 +381,7 @@ connection is back replaces them with real API values.
 | zone | ENUM(masjid, boys_hostel, stanza, girls) | |
 | address | TEXT | PG/address name |
 | status | ENUM(pending, approved, rejected) | |
+| rejection_reason | TEXT | Admin's remark; shown at login, cleared on resubmit/approve |
 | is_phone_verified | BOOLEAN | |
 | fcm_token | TEXT | Expo push token |
 | profile_picture | TEXT | |

@@ -13,6 +13,7 @@ import { IslamicGeometric, StarDivider } from '../../../components/ui/IslamicPat
 import api from '../../../services/api';
 import { ENDPOINTS } from '../../../constants/api';
 import Toast from 'react-native-toast-message';
+import ExpoGoNotice from '../../../components/ui/ExpoGoNotice';
 
 const ZONE_KEYS = ['masjid', 'boys_hostel', 'stanza', 'girls'] as const;
 
@@ -102,6 +103,7 @@ export default function AdminDashboard() {
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}>
+        <ExpoGoNotice />
         <View style={styles.header}>
           <IslamicGeometric opacity={0.08} size={300} />
           <View style={styles.headerContent}>

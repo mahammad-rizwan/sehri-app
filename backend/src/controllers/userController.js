@@ -148,7 +148,7 @@ const listUsers = async (req, res) => {
 const updateUserStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, rejection_reason } = req.body;
 
     if (!['approved', 'rejected', 'pending'].includes(status)) {
       return error(res, 'Invalid status. Use approved, rejected, or pending.', 400);
@@ -161,8 +161,38 @@ const updateUserStatus = async (req, res) => {
       return error(res, 'You can only manage users from your zone', 403);
     }
 
-    await user.update({ status });
-    return success(res, { id: user.id, status: user.status }, `User status set to ${status}`);
+    const updates = { status };
+    if (status === 'rejected') {
+      // The remark is the whole point of a rejection — it tells the applicant
+      // what to correct before resubmitting.
+      updates.rejection_reason = (rejection_reason || '').trim() || null;
+    } else {
+      // Approving or reverting to pending clears the old remark so a stale
+      // reason is never shown again.
+      updates.rejection_reason = null;
+    }
+
+    await user.update(updates);
+
+    notifyOne(
+      user.fcm_token,
+      status === 'approved' ? '✅ Account Approved'
+        : status === 'rejected' ? '❌ Registration Needs Changes'
+        : 'ℹ️ Account Status Updated',
+      status === 'approved'
+        ? 'Your account has been approved. You can log in now.'
+        : status === 'rejected'
+          ? `${updates.rejection_reason || 'Your registration was not accepted.'} Open the app to correct your details and resubmit.`
+          : 'Your account is pending review again.',
+    ).catch((e) => logger.warn('notifyOne failed:', e.message));
+
+    logger.info(`User ${user.phone} set to ${status} by ${req.userRole} ${req.user.id}`);
+
+    return success(res, {
+      id: user.id,
+      status: user.status,
+      rejection_reason: user.rejection_reason,
+    }, `User status set to ${status}`);
   } catch (err) {
     logger.error('updateUserStatus error:', err);
     return error(res, 'Failed to update status', 500);

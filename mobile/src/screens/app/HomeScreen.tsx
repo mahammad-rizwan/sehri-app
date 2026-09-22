@@ -15,6 +15,7 @@ import { CrescentMoon, IslamicGeometric, StarDivider } from '../../components/ui
 import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
 import Toast from 'react-native-toast-message';
+import ExpoGoNotice from '../../components/ui/ExpoGoNotice';
 
 interface PrayerSlot { key: string; name: string; time: string; icon: string; color: string; }
 
@@ -508,6 +509,7 @@ export default function HomeScreen() {
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#0A1A2E']} style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}>
+        <ExpoGoNotice />
         <Animated.View style={{ opacity: headerFade }}>
           <View style={styles.header}>
             <IslamicGeometric opacity={0.07} size={RESPONSIVE.width * 0.9} />

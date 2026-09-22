@@ -55,6 +55,11 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
   },
+  rejection_reason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: "Admin's remark when rejecting; shown to the user at login so they know what to fix",
+  },
   fcm_token: {
     type: DataTypes.TEXT,
     allowNull: true,

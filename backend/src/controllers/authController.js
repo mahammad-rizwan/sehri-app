@@ -4,6 +4,7 @@ const { User, Admin, SuperAdmin, OTP, Tracking, ProfileEditRequest } = require('
 const { saveOTP, verifyOTP, sendOTP } = require('../utils/otp');
 const { generateTokens, verifyRefreshToken, generatePendingEditToken, verifyPendingEditToken } = require('../utils/jwt');
 const { success, error } = require('../utils/response');
+const { notifyReviewers } = require('../services/expoPushService');
 const logger = require('../utils/logger');
 
 const DISTRIBUTOR_PHONE = process.env.DISTRIBUTOR_PHONE || '9483384972';
@@ -178,7 +179,18 @@ const login = async (req, res) => {
         });
       }
       if (user.status === 'rejected') {
-        return error(res, 'Your account has been rejected. Please contact admin.', 403);
+        // The password was verified above, so this is genuinely the applicant.
+        // Hand back the admin's remark plus an edit token so they can correct
+        // their details and resubmit without another OTP.
+        return error(res, 'Your registration needs some changes before it can be approved.', 403, {
+          status: 'rejected',
+          reason: 'rejected',
+          remark: user.rejection_reason || null,
+          phone: user.phone, zone: user.zone, name: user.name,
+          address: user.address, gender: user.gender,
+          occupation: user.occupation, area: user.area,
+          editToken: generatePendingEditToken(user.id),
+        });
       }
     }
 
@@ -433,10 +445,13 @@ const updatePendingRegistration = async (req, res) => {
     const user = await User.findByPk(decoded.userId);
     if (!user) return error(res, 'Account not found', 404);
 
-    // Once an admin has acted on the account this route must stop working.
-    if (user.status !== 'pending') {
-      return error(res, 'This account has already been reviewed and can no longer be edited here.', 403);
+    // Editable while awaiting review, and while rejected — a rejection is an
+    // invitation to fix something, not a dead end. An approved account must
+    // instead go through the profile-edit request queue.
+    if (!['pending', 'rejected'].includes(user.status)) {
+      return error(res, 'This account is already approved. Use Request Profile Edit from your profile instead.', 403);
     }
+    const wasRejected = user.status === 'rejected';
 
     // Belt and braces: never let this route be used to sidestep a profile edit
     // that is sitting in the review queue.
@@ -468,17 +483,37 @@ const updatePendingRegistration = async (req, res) => {
       return error(res, 'No changes supplied', 400);
     }
 
+    // Resubmitting after a rejection puts the account back in the queue and
+    // clears the old remark, so the reviewer sees a clean request.
+    if (wasRejected) {
+      updates.status = 'pending';
+      updates.rejection_reason = null;
+    }
+
     await user.update(updates);
-    logger.info(`Pending registration edited without OTP: ${user.phone} (${user.name})`);
+    logger.info(
+      `${wasRejected ? 'Rejected registration resubmitted' : 'Pending registration edited'} without OTP: ${user.phone} (${user.name})`,
+    );
+
+    if (wasRejected) {
+      notifyReviewers(
+        user.zone,
+        '🔁 Registration Resubmitted',
+        `${user.name} has corrected their details after rejection and is awaiting approval.`,
+      ).catch((e) => logger.warn('notifyReviewers failed:', e.message));
+    }
 
     return success(res, {
       userId: user.id,
       name: user.name,
       phone: user.phone,
+      resubmitted: wasRejected,
       distributorContact: DISTRIBUTOR_PHONE,
       // Refreshed so a slow edit session does not expire mid-flow.
       editToken: generatePendingEditToken(user.id),
-    }, 'Your details have been updated. Your account is still pending approval.');
+    }, wasRejected
+      ? 'Your details have been resubmitted and are pending approval again.'
+      : 'Your details have been updated. Your account is still pending approval.');
   } catch (err) {
     logger.error('updatePendingRegistration error:', err);
     return error(res, 'Failed to update your details', 500);

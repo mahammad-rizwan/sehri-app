@@ -164,6 +164,7 @@ export default function RegisterScreen() {
    * letting an unauthenticated edit through.
    */
   const [editingAfterRegister, setEditingAfterRegister] = useState(false);
+  const [wasResubmitted, setWasResubmitted] = useState(false);
   const isEditMode = (params.edit === '1' || editingAfterRegister) && !!pendingEditToken;
 
   // ── Derived options (cascade) ──
@@ -317,7 +318,7 @@ export default function RegisterScreen() {
     }
     try {
       setLoading(true);
-      await updatePendingRegistration({
+      const res = await updatePendingRegistration({
         name: form.name,
         gender: form.gender,
         occupation: form.occupation,
@@ -327,7 +328,13 @@ export default function RegisterScreen() {
         address: finalAddress,
         ...(form.password ? { password: form.password } : {}),
       });
-      Toast.show({ type: 'success', text1: 'Details updated' });
+      // The backend flags a resubmission after a rejection, which is a
+      // meaningfully different outcome from tidying up a pending registration.
+      setWasResubmitted(!!res?.data?.resubmitted);
+      Toast.show({
+        type: 'success',
+        text1: res?.data?.resubmitted ? 'Resubmitted for approval' : 'Details updated',
+      });
       transitionToStep('success');
     } catch (err: any) {
       if (err?.message === 'NO_EDIT_TOKEN' || err?.response?.status === 401) {
@@ -630,11 +637,24 @@ export default function RegisterScreen() {
   // ── Step 4: Success ───────────────────────────────────────────────────────
   const renderSuccessStep = () => (
     <View style={{ paddingVertical: 8 }}>
-      <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 12 }}>🌙</Text>
-      <Text style={[s.stepTitle, { textAlign: 'center' }]}>Registration Submitted!</Text>
+      <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 12 }}>
+        {wasResubmitted ? '🔁' : '🌙'}
+      </Text>
+      <Text style={[s.stepTitle, { textAlign: 'center' }]}>
+        {wasResubmitted ? 'Resubmitted for Approval' : 'Registration Submitted!'}
+      </Text>
       <Text style={[s.stepSubtitle, { textAlign: 'center', marginBottom: 20 }]}>
-        JazakAllahu Khayran! Your registration is complete.{'\n'}
-        Contact your zone admin below for approval.
+        {wasResubmitted ? (
+          <>
+            Your corrections have been sent back to your zone admin.{'\n'}
+            You'll be able to log in once they approve.
+          </>
+        ) : (
+          <>
+            JazakAllahu Khayran! Your registration is complete.{'\n'}
+            Contact your zone admin below for approval.
+          </>
+        )}
       </Text>
 
       <ZoneContactsCard zone={internalZone} />

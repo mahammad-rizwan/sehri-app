@@ -55,6 +55,17 @@ async function ensureSchema() {
     }
   }
 
+  // ── users.rejection_reason (remark shown to a rejected applicant) ─────────
+  try {
+    const cols = await qi.describeTable('users');
+    if (!cols.rejection_reason) {
+      await sequelize.query('ALTER TABLE users ADD COLUMN rejection_reason TEXT NULL');
+      applied.push('added users.rejection_reason');
+    }
+  } catch (err) {
+    logger.error(`ensureSchema: rejection_reason step failed — ${err.message}`);
+  }
+
   if (applied.length) {
     logger.info(`🔧 Schema updated on boot: ${applied.join('; ')}`);
   } else {

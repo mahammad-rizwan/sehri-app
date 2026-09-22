@@ -29,8 +29,11 @@ export default function LoginScreen() {
   const [pendingInfo, setPendingInfo] = useState<{
     phone: string; zone: string; name: string; address?: string;
     gender?: string; occupation?: string; area?: string;
-    /** 'registration' = never approved yet, 'profile_edit' = changes under review */
-    reason?: 'registration' | 'profile_edit';
+    /** 'registration' = awaiting first approval, 'profile_edit' = changes under
+     *  review, 'rejected' = sent back with a remark to fix */
+    reason?: 'registration' | 'profile_edit' | 'rejected';
+    /** The admin's remark, shown when reason === 'rejected' */
+    remark?: string | null;
   } | null>(null);
   const router = useRouter();
   const { login, setPendingEditToken } = useAuthStore();
@@ -92,6 +95,18 @@ export default function LoginScreen() {
     } catch (err: any) {
       const httpStatus = err?.response?.status;
       const extras = err?.response?.data?.errors;
+      if (httpStatus === 403 && extras?.status === 'rejected') {
+        // The password was checked before this 403, so the edit token is safe
+        // to hand over — they can correct their details and resubmit.
+        setPendingEditToken(extras.editToken || null);
+        setPendingInfo({
+          phone: extras.phone || phone, zone: extras.zone || '', name: extras.name || '',
+          address: extras.address, gender: extras.gender, occupation: extras.occupation, area: extras.area,
+          reason: 'rejected', remark: extras.remark || null,
+        });
+        return;
+      }
+
       if (httpStatus === 403 && extras?.status === 'pending') {
         // The password was accepted before this 403, so the backend hands back
         // an edit token — that is what lets the edit flow skip a second OTP.
@@ -210,7 +225,7 @@ export default function LoginScreen() {
 
       {pendingInfo && (
         <PendingApprovalOverlay
-          name={pendingInfo.name} zone={pendingInfo.zone} reason={pendingInfo.reason}
+          name={pendingInfo.name} zone={pendingInfo.zone} reason={pendingInfo.reason} remark={pendingInfo.remark}
           onEdit={() => {
             const p = pendingInfo;
             setPendingInfo(null);
@@ -515,8 +530,9 @@ const ZONE_CONTACTS_DATA = [
   { key: 'girls', label: 'Girls Zone', emoji: '🌸', color: COLORS.zonesGirls, phone: '9876543201' },
 ];
 
-function PendingApprovalOverlay({ name, zone, reason, onEdit, onDismiss }: { name: string; zone: string; reason?: 'registration' | 'profile_edit'; onEdit: () => void; onDismiss: () => void }) {
+function PendingApprovalOverlay({ name, zone, reason, remark, onEdit, onDismiss }: { name: string; zone: string; reason?: 'registration' | 'profile_edit' | 'rejected'; remark?: string | null; onEdit: () => void; onDismiss: () => void }) {
   const underReview = reason === 'profile_edit';
+  const rejected    = reason === 'rejected';
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onDismiss}>
       <View style={pa.overlay}>
@@ -527,14 +543,30 @@ function PendingApprovalOverlay({ name, zone, reason, onEdit, onDismiss }: { nam
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={pa.body} showsVerticalScrollIndicator={false}>
-            <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 12 }}>{underReview ? '📝' : '⏳'}</Text>
-            <Text style={pa.title}>{underReview ? 'Changes Under Review' : 'Account Pending Approval'}</Text>
+            <Text style={{ fontSize: 48, textAlign: 'center', marginBottom: 12 }}>
+              {rejected ? '✏️' : underReview ? '📝' : '⏳'}
+            </Text>
+            <Text style={pa.title}>
+              {rejected ? 'Changes Needed' : underReview ? 'Changes Under Review' : 'Account Pending Approval'}
+            </Text>
             {name ? <Text style={pa.name}>Hello, {name}! 🙌</Text> : null}
             <Text style={pa.subtitle}>
-              {underReview
-                ? 'Your profile changes were submitted and are waiting for your zone admin or the super admin to approve them. You can log in again as soon as they do.'
-                : 'Your registration is complete. Your account is waiting for approval from your zone admin.'}
+              {rejected
+                ? 'Your zone admin has asked for a few corrections before your account can be approved.'
+                : underReview
+                  ? 'Your profile changes were submitted and are waiting for your zone admin or the super admin to approve them. You can log in again as soon as they do.'
+                  : 'Your registration is complete. Your account is waiting for approval from your zone admin.'}
             </Text>
+
+            {/* The admin's remark — the whole point of the rejection */}
+            {rejected && (
+              <View style={pa.remarkBox}>
+                <Text style={pa.remarkLabel}>ADMIN'S REMARK</Text>
+                <Text style={pa.remarkText}>
+                  {remark || 'No specific reason was given. Please contact your zone admin.'}
+                </Text>
+              </View>
+            )}
 
             <View style={pa.contactsCard}>
               <Text style={pa.contactsTitle}>📞 Contact Your Zone Admin</Text>
@@ -551,9 +583,15 @@ function PendingApprovalOverlay({ name, zone, reason, onEdit, onDismiss }: { nam
             </View>
 
             {!underReview && (
-              <TouchableOpacity style={pa.editBtn} onPress={onEdit} activeOpacity={0.8}>
-                <Ionicons name="create-outline" size={15} color={COLORS.primary} />
-                <Text style={pa.editBtnText}>✏️ Edit My Details Before Approval</Text>
+              <TouchableOpacity
+                style={[pa.editBtn, rejected && pa.editBtnPrimary]}
+                onPress={onEdit}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="create-outline" size={15} color={rejected ? COLORS.textOnPrimary : COLORS.primary} />
+                <Text style={[pa.editBtnText, rejected && { color: COLORS.textOnPrimary }]}>
+                  {rejected ? 'Fix My Details & Resubmit' : '✏️ Edit My Details Before Approval'}
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -568,6 +606,14 @@ function PendingApprovalOverlay({ name, zone, reason, onEdit, onDismiss }: { nam
 }
 
 const pa = StyleSheet.create({
+  remarkBox: {
+    backgroundColor: 'rgba(239,83,80,0.10)',
+    borderWidth: 1, borderColor: 'rgba(239,83,80,0.45)',
+    borderRadius: 12, padding: 14, marginTop: 16,
+  },
+  remarkLabel: { color: '#EF5350', fontSize: 9.5, fontWeight: '800', letterSpacing: 1 },
+  remarkText:  { color: COLORS.textPrimary, fontSize: 14, lineHeight: 21, marginTop: 7 },
+  editBtnPrimary: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 8, maxHeight: '92%', borderTopWidth: 1, borderColor: 'rgba(201,168,76,0.2)' },
   hdr: { alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12 },
