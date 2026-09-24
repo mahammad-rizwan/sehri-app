@@ -75,6 +75,12 @@ export const ENDPOINTS = {
   PUSH_LOCATION: (id: string) => `/tracking/${id}/push-location`,
   DELETE_RIDER: (id: string) => `/tracking/${id}`,
 
+  // Zone addresses & map markers (super admin managed)
+  ADDRESSES: '/places/addresses',
+  ADDRESS_ONE: (id: string) => `/places/addresses/${id}`,
+  MAP_MARKERS: '/places/markers',
+  MAP_MARKER_ONE: (id: string) => `/places/markers/${id}`,
+
   // App-wide settings (Ramadan mode)
   SETTINGS: '/settings',
   RAMADAN_STATUS: '/settings/ramadan',

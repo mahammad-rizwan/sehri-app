@@ -20,65 +20,28 @@ export const MARKER_COLORS = {
   rider: COLORS.accentGreen,           // #4CAF50 green — the only thing that moves
 } as const;
 
+/**
+ * The five symbols a super admin can pick from in Zone & Map Management, and
+ * how each one draws. The keys match MapMarker.SYMBOLS on the server.
+ */
+export const SYMBOL_META = {
+  masjid:      { label: 'Masjid',            emoji: '🕌', color: MARKER_COLORS.masjid },
+  boys_hostel: { label: 'Boys Hostel',       emoji: '🏠', color: MARKER_COLORS.boys_hostel },
+  stanza:      { label: 'Stanza',            emoji: '🏡', color: MARKER_COLORS.stanza },
+  girls:       { label: 'Girls Zone',        emoji: '🌸', color: MARKER_COLORS.girls },
+  distributor: { label: 'Distribution Point', emoji: '📦', color: MARKER_COLORS.distributor },
+} as const;
+
+export type MapSymbol = keyof typeof SYMBOL_META;
+export const SYMBOL_KEYS = Object.keys(SYMBOL_META) as MapSymbol[];
+
+/** Legend under the map — the symbols, plus the one thing that moves. */
 export const MAP_LEGEND = [
-  { key: 'masjid', label: 'Masjid Zone', emoji: '🕌', color: MARKER_COLORS.masjid },
-  { key: 'boys_hostel', label: 'Boys Hostel', emoji: '🏠', color: MARKER_COLORS.boys_hostel },
-  { key: 'stanza', label: 'Stanza', emoji: '🏡', color: MARKER_COLORS.stanza },
-  { key: 'girls', label: 'Girls Zone', emoji: '🌸', color: MARKER_COLORS.girls },
-  { key: 'distributor', label: 'Distribution Point', emoji: '📦', color: MARKER_COLORS.distributor },
+  ...SYMBOL_KEYS.map((key) => ({ key, ...SYMBOL_META[key] })),
   { key: 'rider', label: 'Live Rider', emoji: '🛵', color: MARKER_COLORS.rider },
-] as const;
+];
 
 export type LatLng = { latitude: number; longitude: number };
-
-export type ZonePoint = LatLng & {
-  key: string;
-  title: string;
-  emoji: string;
-  color: string;
-};
-
-export const ZONE_POINTS: ZonePoint[] = [
-  { key: 'masjid', title: 'Masjid Zone', emoji: '🕌', color: MARKER_COLORS.masjid, latitude: 12.9227319, longitude: 77.4967204 },
-  { key: 'boys_hostel', title: 'Boys Hostel Zone', emoji: '🏠', color: MARKER_COLORS.boys_hostel, latitude: 12.9248564, longitude: 77.4984980 },
-  { key: 'stanza', title: 'Stanza Zone', emoji: '🏡', color: MARKER_COLORS.stanza, latitude: 12.9241783, longitude: 77.5027661 },
-  { key: 'distributor', title: 'Distribution Point', emoji: '📦', color: MARKER_COLORS.distributor, latitude: 12.896781, longitude: 77.492520 },
-];
-
-/**
- * Girls-zone drop points. These range from ~5m to ~110m apart, so they are
- * clustered by on-screen distance at the current zoom rather than on a fixed
- * grid — see clusterForZoom below.
- */
-export const GIRLS_POINTS: LatLng[] = [
-  { latitude: 12.915364144815069, longitude: 77.49335017975658 },
-  { latitude: 12.91419897255419, longitude: 77.4970712624044 },
-  { latitude: 12.91570659098925, longitude: 77.50097029509902 },
-  { latitude: 12.92380582790466, longitude: 77.50373602588688 },
-  { latitude: 12.915201817076271, longitude: 77.50574491044165 },
-  { latitude: 12.92328917158393, longitude: 77.5067395085923 },
-  { latitude: 12.924111557207349, longitude: 77.5059035085923 },
-  { latitude: 12.924099399535349, longitude: 77.5058613085923 },
-  { latitude: 12.923876557374848, longitude: 77.50586402393485 },
-  { latitude: 12.923720485760734, longitude: 77.50579030859228 },
-  { latitude: 12.9235149005565, longitude: 77.50469629694862 },
-  { latitude: 12.92376968571744, longitude: 77.50265715277057 },
-  { latitude: 12.923668492451107, longitude: 77.50267850549456 },
-  { latitude: 12.924408039697022, longitude: 77.50268363108191 },
-  { latitude: 12.924348454134918, longitude: 77.50285152258107 },
-  { latitude: 12.924592698187322, longitude: 77.50216465549661 },
-  { latitude: 12.923720967533537, longitude: 77.50495457595349 },
-  { latitude: 12.922765307379874, longitude: 77.50478405498131 },
-  { latitude: 12.92292208094766, longitude: 77.50566864866036 },
-  { latitude: 12.922738866847084, longitude: 77.50588426715788 },
-  { latitude: 12.923428332652984, longitude: 77.50565654271148 },
-  { latitude: 12.923442057560338, longitude: 77.50597773722843 },
-  { latitude: 12.923727666180895, longitude: 77.50573164456233 },
-  { latitude: 12.923877332821611, longitude: 77.50592409304934 },
-  { latitude: 12.92392504313272, longitude: 77.50580473473313 },
-  { latitude: 12.923808708383447, longitude: 77.50609240169052 },
-  { latitude: 12.923469684258185, longitude: 77.50674837557953 },
-];
 
 /** Fallback view when no rider has reported a position yet. */
 export const DEFAULT_REGION = {
@@ -101,7 +64,7 @@ export const MAP_STYLE = [
   { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#1a3a55' }] },
 ];
 
-export type Cluster = LatLng & { count: number };
+export type Cluster = LatLng & { count: number; label?: string };
 
 /**
  * Merge points that would visually collide at the given zoom.
@@ -114,7 +77,7 @@ export type Cluster = LatLng & { count: number };
  * degrees-per-pixel falls out of it directly.
  */
 export function clusterForRegion(
-  points: LatLng[],
+  points: (LatLng & { label?: string })[],
   latitudeDelta: number,
   mapHeightPx: number,
 ): Cluster[] {
@@ -141,16 +104,24 @@ export function clusterForRegion(
         break;
       }
     }
-    if (!merged) out.push({ latitude: p.latitude, longitude: p.longitude, count: 1 });
+    // A cluster that ends up with one member is just that pin, so keep its name
+    // — zooming in far enough must still tell you what you are looking at.
+    if (!merged) out.push({ latitude: p.latitude, longitude: p.longitude, count: 1, label: p.label });
   }
 
   return out;
 }
 
-/** Region that fits every fixed point, plus the rider when there is one. */
-export function regionForAll(rider?: LatLng | null) {
-  const pts: LatLng[] = [...ZONE_POINTS, ...GIRLS_POINTS];
+/**
+ * Region that fits every marker, plus the rider when there is one.
+ *
+ * Markers are loaded from the server, so this is called again once they arrive
+ * — before that it falls back to the campus view.
+ */
+export function regionForRows(rows: LatLng[], rider?: LatLng | null) {
+  const pts: LatLng[] = [...rows];
   if (rider) pts.push(rider);
+  if (!pts.length) return DEFAULT_REGION;
 
   const lats = pts.map((p) => p.latitude);
   const lngs = pts.map((p) => p.longitude);

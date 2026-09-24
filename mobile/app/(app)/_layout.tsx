@@ -272,7 +272,7 @@ export default function AppLayout() {
       // is a tab for zone admins but not for super admins, so it needs listing
       // here too.
       'admin/profile-edit-requests', 'admin/broadcast', 'admin/sync-data',
-      'admin/ramadan',
+      'admin/ramadan', 'admin/places',
       'admin/poll-history',
       'feedback', 'poll-history', 'rider', 'broadcast',
     ];

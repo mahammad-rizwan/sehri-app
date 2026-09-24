@@ -28,6 +28,7 @@ const prayerRoutes = require('./routes/prayers');
 const syncRoutes = require('./routes/sync');
 const broadcastRoutes = require('./routes/broadcast');
 const settingsRoutes = require('./routes/settings');
+const placesRoutes = require('./routes/places');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -73,6 +74,7 @@ app.use('/api/prayers', prayerRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/places', placesRoutes);
 
 // ─────────────── 404 Handler ───────────────
 app.use((req, res) => {

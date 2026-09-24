@@ -4,9 +4,10 @@ import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { COLORS } from '../../constants/theme';
 import { isExpoGo } from '../../utils/runtime';
 import {
-  ZONE_POINTS, GIRLS_POINTS, MAP_STYLE, MARKER_COLORS,
-  DEFAULT_REGION, clusterForRegion, regionForAll, LatLng,
+  MAP_STYLE, MARKER_COLORS, SYMBOL_META,
+  DEFAULT_REGION, clusterForRegion, regionForRows, LatLng,
 } from '../../constants/mapData';
+import { fetchMapMarkers, type MapMarkerRow } from '../../services/places';
 
 /**
  * Android has no non-Google map provider, so PROVIDER_DEFAULT (undefined)
@@ -73,10 +74,36 @@ export default function DeliveryMap({
     setLatitudeDelta((prev) => (Math.abs(prev - rounded) > prev * 0.15 ? rounded : prev));
   }, []);
 
-  const girlsClusters = useMemo(
-    () => clusterForRegion(GIRLS_POINTS, latitudeDelta, mapHeight),
-    [latitudeDelta, mapHeight],
-  );
+  /**
+   * Pins are managed by a super admin and read at runtime, so moving one no
+   * longer needs an app release. Nothing else is drawn on the map — a symbol
+   * at a point, and the label when you tap it.
+   */
+  const [markers, setMarkers] = useState<MapMarkerRow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchMapMarkers()
+      .then((rows) => { if (!cancelled) setMarkers(rows); })
+      .catch(() => { /* map still renders, just without pins */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Cluster only the dense symbol groups; a handful of pins never collide.
+  const clustered = useMemo(() => {
+    const bySymbol: Record<string, MapMarkerRow[]> = {};
+    for (const m of markers) (bySymbol[m.symbol] ||= []).push(m);
+
+    return Object.entries(bySymbol).flatMap(([symbol, rows]) => {
+      if (rows.length < 4) {
+        return rows.map((r) => ({ ...r, count: 1 as number, key: r.id }));
+      }
+      return clusterForRegion(rows, latitudeDelta, mapHeight).map((c, i) => ({
+        ...c,
+        symbol: symbol as MapMarkerRow['symbol'],
+        key: `${symbol}-${i}-${c.count}`,
+      }));
+    });
+  }, [markers, latitudeDelta, mapHeight]);
 
   // Recentre when the rider moves, unless the user has panned away.
   useEffect(() => {
@@ -96,7 +123,7 @@ export default function DeliveryMap({
    * each new set needs its own capture window.
    */
   const [tracksChanges, setTracksChanges] = useState(true);
-  const clusterKey = girlsClusters.length;
+  const clusterKey = clustered.length;
 
   useEffect(() => {
     setTracksChanges(true);
@@ -104,7 +131,18 @@ export default function DeliveryMap({
     return () => clearTimeout(t);
   }, [clusterKey]);
 
-  const initialRegion = useMemo(() => regionForAll(rider), []); // eslint-disable-line react-hooks/exhaustive-deps
+  /**
+   * `initialRegion` is read once at mount, and the markers arrive after that,
+   * so the first fit has to be animated in rather than passed as a prop.
+   * Skipped when a rider is already being followed — that camera wins.
+   */
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (fitted.current || !markers.length) return;
+    fitted.current = true;
+    if (rider && followRider) return;
+    mapRef.current?.animateToRegion(regionForRows(markers), 600);
+  }, [markers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View style={[st.wrap, style]} onLayout={onLayout}>
@@ -116,7 +154,7 @@ export default function DeliveryMap({
         // and ios.config.googleMapsApiKey (both only apply to real builds).
         provider={MAP_PROVIDER}
         style={StyleSheet.absoluteFill}
-        initialRegion={initialRegion}
+        initialRegion={DEFAULT_REGION}
         customMapStyle={MAP_STYLE}
         onRegionChangeComplete={onRegionChangeComplete}
         onPanDrag={() => setFollowRider(false)}
@@ -130,38 +168,30 @@ export default function DeliveryMap({
         loadingBackgroundColor={COLORS.background}
         loadingIndicatorColor={COLORS.primary}
       >
-        {ZONE_POINTS.map((p) => (
-          <Marker
-            key={p.key}
-            coordinate={{ latitude: p.latitude, longitude: p.longitude }}
-            title={p.title}
-            tracksViewChanges={tracksChanges}
-          >
-            <View style={[st.pin, { backgroundColor: p.color }]}>
-              <Text style={st.pinEmoji}>{p.emoji}</Text>
-            </View>
-          </Marker>
-        ))}
-
-        {girlsClusters.map((c, i) => (
-          <Marker
-            key={`girls-${i}-${c.count}`}
-            coordinate={{ latitude: c.latitude, longitude: c.longitude }}
-            title={c.count > 1 ? `${c.count} girls-zone drop points` : 'Girls Zone'}
-            description={c.count > 1 ? 'Zoom in to separate' : undefined}
-            tracksViewChanges={tracksChanges}
-          >
-            {c.count > 1 ? (
-              <View style={[st.cluster, { backgroundColor: MARKER_COLORS.girls }]}>
-                <Text style={st.clusterTxt}>{c.count}</Text>
-              </View>
-            ) : (
-              <View style={[st.pin, { backgroundColor: MARKER_COLORS.girls }]}>
-                <Text style={st.pinEmoji}>🌸</Text>
-              </View>
-            )}
-          </Marker>
-        ))}
+        {clustered.map((m: any) => {
+          const meta = SYMBOL_META[m.symbol as keyof typeof SYMBOL_META] || SYMBOL_META.distributor;
+          const grouped = (m.count || 1) > 1;
+          return (
+            <Marker
+              key={m.key}
+              coordinate={{ latitude: m.latitude, longitude: m.longitude }}
+              // Tapping shows the name and nothing else — no zone, no address,
+              // no coordinates.
+              title={grouped ? `${m.count} ${meta.label} points` : m.label}
+              tracksViewChanges={tracksChanges}
+            >
+              {grouped ? (
+                <View style={[st.cluster, { backgroundColor: meta.color }]}>
+                  <Text style={st.clusterTxt}>{m.count}</Text>
+                </View>
+              ) : (
+                <View style={[st.pin, { backgroundColor: meta.color }]}>
+                  <Text style={st.pinEmoji}>{meta.emoji}</Text>
+                </View>
+              )}
+            </Marker>
+          );
+        })}
 
         {rider && (
           <Marker

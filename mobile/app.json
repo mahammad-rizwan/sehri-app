@@ -16,7 +16,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.sehriconnect.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "We use your location for live delivery tracking.",
+        "NSLocationWhenInUseUsageDescription": "We use your location for live delivery tracking, and to centre the map when an admin places a delivery point.",
         "NSLocationAlwaysUsageDescription": "We use your location for live delivery tracking.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "We share your location with users only while you are delivering, so they can follow your Sehri delivery live.",
         "UIBackgroundModes": [

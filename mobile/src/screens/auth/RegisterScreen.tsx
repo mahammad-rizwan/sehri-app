@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   COLORS, SIZES, OCCUPATIONS, OccupationKey,
   BANGALORE_AREAS, AREA_CONFIG, LOCALITY_COLLEGES,
-  COLLEGE_ZONES, ZONE_ADDRESSES, RESPONSIVE, SHADOWS,
+  COLLEGE_ZONES, RESPONSIVE, SHADOWS,
 } from '../../constants/theme';
 import GoldButton from '../../components/ui/GoldButton';
 import OTPInput from '../../components/ui/OTPInput';
@@ -17,6 +17,7 @@ import PremiumCard from '../../components/ui/PremiumCard';
 import { CrescentMoon, IslamicGeometric } from '../../components/ui/IslamicPattern';
 import { useAuthStore } from '../../store/authStore';
 import Toast from 'react-native-toast-message';
+import { fetchAddresses, type ZoneAddress } from '../../services/places';
 
 const { width, height } = Dimensions.get('window');
 
@@ -147,7 +148,29 @@ export default function RegisterScreen() {
   );
   const collegeOptions  = LOCALITY_COLLEGES[locality] || [];
   const zoneOptions     = COLLEGE_ZONES[college] || [];
-  const addressOptions  = ZONE_ADDRESSES[internalZone] || [];
+  /**
+   * Addresses are managed by a super admin and fetched at runtime — adding a
+   * PG no longer needs an app release. "Others" stays client-side so someone
+   * whose building is not listed can still register.
+   */
+  const [addressRows, setAddressRows] = useState<ZoneAddress[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!internalZone) { setAddressRows([]); return; }
+    let cancelled = false;
+    setAddressesLoading(true);
+    fetchAddresses(internalZone)
+      .then((rows) => { if (!cancelled) setAddressRows(rows); })
+      .catch(() => { if (!cancelled) setAddressRows([]); })
+      .finally(() => { if (!cancelled) setAddressesLoading(false); });
+    return () => { cancelled = true; };
+  }, [internalZone]);
+
+  const addressOptions = [
+    ...addressRows.map((a) => ({ key: a.id, label: a.name })),
+    { key: 'others', label: 'Others' },
+  ];
 
   // ── Pre-fill from edit params ──
   useEffect(() => {
@@ -176,9 +199,14 @@ export default function RegisterScreen() {
       }
       // Try to match address to a known pgAddress option
       if (params.address && params.zone) {
-        const addrs = ZONE_ADDRESSES[params.zone] || [];
-        const match = addrs.find((a: any) => a.label === params.address);
-        if (match) setPgAddress(match.key);
+        // The saved address is stored as text, so match it against whatever
+        // the server currently lists for that zone.
+        fetchAddresses(params.zone)
+          .then((rows) => {
+            const match = rows.find((a) => a.name === params.address);
+            if (match) setPgAddress(match.id);
+          })
+          .catch(() => { /* leave unselected; they can pick again */ });
       }
     }
   }, []);

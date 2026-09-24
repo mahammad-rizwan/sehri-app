@@ -159,49 +159,9 @@ export const COLLEGE_ZONES: Record<string, { key: string; label: string; emoji: 
   rr_college: [],
 };
 
-export const ZONE_ADDRESSES: Record<string, { key: string; label: string }[]> = {
-  masjid: [
-    { key: 'maruthi_pg', label: 'Maruthi PG' }, { key: 'infront_masjid', label: 'Infront of Masjid' },
-    { key: 'dubasipalya', label: 'Dubasipalya' }, { key: 'others', label: 'Others' },
-  ],
-  boys_hostel: [
-    { key: 'cauvery_hostel', label: 'Cauvery Hostel' }, { key: 'sir_mv_hostel', label: 'Sir MV Hostel' },
-    { key: 'krishna_hostel', label: 'Krishna Hostel' }, { key: 'chamundi', label: 'Chamundi' },
-    { key: 'others', label: 'Others' },
-  ],
-  stanza: [
-    { key: 'lasya_pg', label: 'Lasya PG' }, { key: 'shiva_sai_pg', label: 'Shiva Sai PG' },
-    { key: 'stanza_huelva', label: 'Stanza Living (Huelva House)' }, { key: 'global_vista', label: 'Global Vista' },
-    { key: 'ss_luxury_pg', label: 'SS Luxury PG' }, { key: 'good_lands_pg', label: 'Good Lands PG' },
-    { key: 'millennial_blue', label: 'Millenial Blue Opal' }, { key: 'paras_global', label: 'Paras Global Kutir' },
-    { key: 'kings_queens', label: 'Kings and Queens PG' }, { key: 'stanza_cordoba', label: 'Stanza Living (Cordoba)' },
-    { key: 'target_pg', label: 'Target PG' }, { key: 'rr_luxury_pg', label: 'RR Luxury PG' },
-    { key: 'krishna_villa', label: 'Krishna Villa Apartments' }, { key: 'balaji_pg', label: 'Balaji PG for Gents' },
-    { key: 'others', label: 'Others' },
-  ],
-  girls: [
-    { key: 'chaitrashree', label: 'Chaitrashree Comforts' }, { key: 'chiguru', label: 'Chiguru PG for Ladies' },
-    { key: 'global_residency', label: 'Global Residency' }, { key: 'global_vista_apt', label: 'Global Vista Apartment' },
-    { key: 'goodlands_ladies', label: 'Goodlands Luxury Ladies PG' },
-    { key: 'habitat_illuminar', label: 'Habitat Illuminar' }, { key: 'jv_queens', label: 'JV Queens PG' },
-    { key: 'jv_queens_prime', label: 'JV Queens Prime PG' },
-    { key: 'krishna_global', label: 'Krishna Global Villaments' },
-    { key: 'new_sl_ladies', label: 'New SL Ladies PG' }, { key: 'rvce_dj_hostel', label: 'RVCE Girls DJ Hostel' },
-    { key: 'rvce_krishna', label: 'RVCE Girls Krishna Garden Hostel' },
-    { key: 'sai_ram_luxury', label: 'Sai Ram Luxury PG for Ladies' },
-    { key: 'samruddhi', label: 'Samruddhi PG for Ladies' },
-    { key: 'sl_grand_luxury', label: 'SL Grand Luxury Ladies PG' },
-    { key: 'sl_prime', label: 'SL Prime PG for Ladies' }, { key: 'sln_grand', label: 'SLN Grand' },
-    { key: 'sri_ladies', label: 'Sri Ladies PG' }, { key: 'sri_sai_durga', label: 'Sri Sai Durga Ladies PG' },
-    { key: 'sri_vengamamba', label: 'Sri Vengamamba PG' }, { key: 'ss_homestay', label: 'SS Home Stay' },
-    { key: 'ssr_pg', label: 'SSR PG for Ladies' },
-    { key: 'stanza_granada', label: 'Stanza Living Granada House' },
-    { key: 'stanza_nome', label: 'Stanza Living Nome House' }, { key: 'stay_luxe', label: 'Stay Luxe Inn' },
-    { key: 'millennial_topaz1', label: 'The Millennial Topaz 1' },
-    { key: 'millennial_topaz2', label: 'The Millennial Topaz 2' },
-    { key: 'others', label: 'Others' },
-  ],
-};
+// Addresses used to live here as a hardcoded list. They are now rows in
+// `zone_addresses`, managed by a super admin under Zone & Map, and fetched
+// by the registration and profile screens via `services/places.ts`.
 
 export const OCCUPATIONS = {
   student: { label: 'Student', emoji: '📚' },

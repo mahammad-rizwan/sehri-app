@@ -116,6 +116,56 @@ async function ensureSchema() {
     logger.error(`ensureSchema: app_settings step failed — ${err.message}`);
   }
 
+  // ── zone_addresses + map_markers, seeded from what was hardcoded ─────────
+  try {
+    const tables = await qi.showAllTables();
+    const names = tables.map((t) => (typeof t === 'string' ? t : t.tableName).toLowerCase());
+
+    const ZoneAddress = require('../models/ZoneAddress');
+    const MapMarker = require('../models/MapMarker');
+
+    if (!names.includes('zone_addresses')) {
+      await ZoneAddress.sync();
+      applied.push('created table zone_addresses');
+    }
+    if (!names.includes('map_markers')) {
+      await MapMarker.sync();
+      applied.push('created table map_markers');
+    }
+
+    // First run only: carry across the addresses and pins that used to live in
+    // the app bundle, so nothing disappears the moment this ships.
+    const seed = require('./seedPlaces.json');
+
+    if ((await ZoneAddress.count()) === 0) {
+      const rows = [];
+      for (const [zone, names_] of Object.entries(seed.addresses || {})) {
+        for (const name of names_) rows.push({ name, zone });
+      }
+      if (rows.length) {
+        await ZoneAddress.bulkCreate(rows, { ignoreDuplicates: true });
+        applied.push(`seeded ${rows.length} zone addresses`);
+      }
+    }
+
+    if ((await MapMarker.count()) === 0) {
+      const rows = (seed.zonePoints || []).map(([key, title, lat, lng]) => ({
+        label: title, source: 'zone', zone: key === 'distributor' ? null : key,
+        symbol: key, latitude: Number(lat), longitude: Number(lng),
+      }));
+      (seed.girlsPoints || []).forEach(([lat, lng], i) => rows.push({
+        label: `Girls Zone Point ${i + 1}`, source: 'custom',
+        symbol: 'girls', latitude: Number(lat), longitude: Number(lng),
+      }));
+      if (rows.length) {
+        await MapMarker.bulkCreate(rows);
+        applied.push(`seeded ${rows.length} map markers`);
+      }
+    }
+  } catch (err) {
+    logger.error(`ensureSchema: places step failed — ${err.message}`);
+  }
+
   if (applied.length) {
     logger.info(`🔧 Schema updated on boot: ${applied.join('; ')}`);
   } else {

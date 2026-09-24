@@ -1,0 +1,196 @@
+{
+ "addresses": {
+  "masjid": [
+   "Maruthi PG",
+   "Infront of Masjid",
+   "Dubasipalya"
+  ],
+  "boys_hostel": [
+   "Cauvery Hostel",
+   "Sir MV Hostel",
+   "Krishna Hostel",
+   "Chamundi"
+  ],
+  "stanza": [
+   "Lasya PG",
+   "Shiva Sai PG",
+   "Stanza Living (Huelva House)",
+   "Global Vista",
+   "SS Luxury PG",
+   "Good Lands PG",
+   "Millenial Blue Opal",
+   "Paras Global Kutir",
+   "Kings and Queens PG",
+   "Stanza Living (Cordoba)",
+   "Target PG",
+   "RR Luxury PG",
+   "Krishna Villa Apartments",
+   "Balaji PG for Gents"
+  ],
+  "girls": [
+   "Chaitrashree Comforts",
+   "Chiguru PG for Ladies",
+   "Global Residency",
+   "Global Vista Apartment",
+   "Goodlands Luxury Ladies PG",
+   "Habitat Illuminar",
+   "JV Queens PG",
+   "JV Queens Prime PG",
+   "Krishna Global Villaments",
+   "New SL Ladies PG",
+   "RVCE Girls DJ Hostel",
+   "RVCE Girls Krishna Garden Hostel",
+   "Sai Ram Luxury PG for Ladies",
+   "Samruddhi PG for Ladies",
+   "SL Grand Luxury Ladies PG",
+   "SL Prime PG for Ladies",
+   "SLN Grand",
+   "Sri Ladies PG",
+   "Sri Sai Durga Ladies PG",
+   "Sri Vengamamba PG",
+   "SS Home Stay",
+   "SSR PG for Ladies",
+   "Stanza Living Granada House",
+   "Stanza Living Nome House",
+   "Stay Luxe Inn",
+   "The Millennial Topaz 1",
+   "The Millennial Topaz 2"
+  ]
+ },
+ "zonePoints": [
+  [
+   "masjid",
+   "Masjid Zone",
+   "12.9227319",
+   "77.4967204"
+  ],
+  [
+   "boys_hostel",
+   "Boys Hostel Zone",
+   "12.9248564",
+   "77.4984980"
+  ],
+  [
+   "stanza",
+   "Stanza Zone",
+   "12.9241783",
+   "77.5027661"
+  ],
+  [
+   "distributor",
+   "Distribution Point",
+   "12.896781",
+   "77.492520"
+  ]
+ ],
+ "girlsPoints": [
+  [
+   "12.915364144815069",
+   "77.49335017975658"
+  ],
+  [
+   "12.91419897255419",
+   "77.4970712624044"
+  ],
+  [
+   "12.91570659098925",
+   "77.50097029509902"
+  ],
+  [
+   "12.92380582790466",
+   "77.50373602588688"
+  ],
+  [
+   "12.915201817076271",
+   "77.50574491044165"
+  ],
+  [
+   "12.92328917158393",
+   "77.5067395085923"
+  ],
+  [
+   "12.924111557207349",
+   "77.5059035085923"
+  ],
+  [
+   "12.924099399535349",
+   "77.5058613085923"
+  ],
+  [
+   "12.923876557374848",
+   "77.50586402393485"
+  ],
+  [
+   "12.923720485760734",
+   "77.50579030859228"
+  ],
+  [
+   "12.9235149005565",
+   "77.50469629694862"
+  ],
+  [
+   "12.92376968571744",
+   "77.50265715277057"
+  ],
+  [
+   "12.923668492451107",
+   "77.50267850549456"
+  ],
+  [
+   "12.924408039697022",
+   "77.50268363108191"
+  ],
+  [
+   "12.924348454134918",
+   "77.50285152258107"
+  ],
+  [
+   "12.924592698187322",
+   "77.50216465549661"
+  ],
+  [
+   "12.923720967533537",
+   "77.50495457595349"
+  ],
+  [
+   "12.922765307379874",
+   "77.50478405498131"
+  ],
+  [
+   "12.92292208094766",
+   "77.50566864866036"
+  ],
+  [
+   "12.922738866847084",
+   "77.50588426715788"
+  ],
+  [
+   "12.923428332652984",
+   "77.50565654271148"
+  ],
+  [
+   "12.923442057560338",
+   "77.50597773722843"
+  ],
+  [
+   "12.923727666180895",
+   "77.50573164456233"
+  ],
+  [
+   "12.923877332821611",
+   "77.50592409304934"
+  ],
+  [
+   "12.92392504313272",
+   "77.50580473473313"
+  ],
+  [
+   "12.923808708383447",
+   "77.50609240169052"
+  ],
+  [
+   "12.923469684258185",
+   "77.50674837557953"
+  ]
+ ]
+}

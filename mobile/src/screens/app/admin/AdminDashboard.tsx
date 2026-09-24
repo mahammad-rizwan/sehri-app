@@ -275,7 +275,17 @@ export default function AdminDashboard() {
                 <AdminAction icon="💬" title="Chat" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/chat' as any)} />
                 <AdminAction icon="👤" title="Manage Admins" color="#FF6B35" onPress={() => router.push('/(app)/admin/manage-admins' as any)} />
                 <AdminAction icon="📢" title="Broadcast" color={COLORS.accentPurple} badge={unreadBroadcasts} onPress={() => router.push('/(app)/admin/broadcast' as any)} />
-                <AdminAction icon="🌙" title="Ramadan Mode" color={ramadanActive ? COLORS.accentGreen : COLORS.textMuted} onPress={() => router.push('/(app)/admin/ramadan' as any)} />
+                {/* AdminAction renders the tile as a ~12% tint of `color`, so a
+                    muted grey came out invisible against the navy background —
+                    and "off" is exactly when this tile matters most, since it
+                    is the only way to turn Sehri features back on. */}
+                <AdminAction
+                  icon={ramadanActive ? '🌙' : '🌑'}
+                  title="Ramadan Mode"
+                  color={ramadanActive ? COLORS.accentGreen : COLORS.primary}
+                  onPress={() => router.push('/(app)/admin/ramadan' as any)}
+                />
+                <AdminAction icon="📍" title="Zone & Map" color={COLORS.zonesStanza} onPress={() => router.push('/(app)/admin/places' as any)} />
                 <AdminAction icon="🔄" title="Sync Data" color={COLORS.accent} onPress={() => router.push('/(app)/admin/sync-data' as any)} />
               </>
             ) : (

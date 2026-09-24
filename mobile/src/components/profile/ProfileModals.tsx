@@ -6,10 +6,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import {
-  COLORS, SIZES, ZONE_CONFIG, ZONE_ADDRESSES, OCCUPATIONS, OccupationKey,
+  COLORS, SIZES, ZONE_CONFIG, OCCUPATIONS, OccupationKey,
 } from '../../constants/theme';
 import { useAuthStore } from '../../store/authStore';
 import GoldButton from '../ui/GoldButton';
+import { fetchAddresses, type ZoneAddress } from '../../services/places';
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Request Profile Edit
@@ -43,7 +44,20 @@ export function EditProfileRequestModal({
     setAddress(user?.address || '');
   }, [visible, user]);
 
-  const addressOptions: { key: string; label: string }[] = (ZONE_ADDRESSES as any)[zone] || [];
+  // Same source as registration — addresses come from the server, not a
+  // hardcoded table, so this list stays correct as PGs are added or retired.
+  const [addressRows, setAddressRows] = useState<ZoneAddress[]>([]);
+
+  useEffect(() => {
+    if (!visible || !zone) { setAddressRows([]); return; }
+    let cancelled = false;
+    fetchAddresses(zone)
+      .then((rows) => { if (!cancelled) setAddressRows(rows); })
+      .catch(() => { if (!cancelled) setAddressRows([]); });
+    return () => { cancelled = true; };
+  }, [visible, zone]);
+
+  const addressOptions = addressRows.map((a) => ({ key: a.id, label: a.name }));
 
   const changed = {
     name: name.trim() !== (user?.name || ''),
