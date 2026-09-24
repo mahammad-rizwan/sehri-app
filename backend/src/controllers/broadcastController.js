@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const { BroadcastMessage, User } = require('../models');
-const { CHANNELS, channelsForSender, resolveAudience } = require('../constants/channels');
+const { ZONES, allowedZonesFor, resolveAudience } = require('../constants/channels');
 const { notifyZones } = require('../services/expoPushService');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
@@ -37,18 +37,20 @@ function extractLinks(body) {
 
 /**
  * GET /broadcasts/channels
- * The channels the caller is allowed to post to.
+ * The zones this sender may address. A zone admin gets exactly one.
  */
 const getChannels = async (req, res) => {
   try {
-    const list = channelsForSender(req.userRole, req.user.zone);
+    const zones = allowedZonesFor(req.userRole, req.user.zone);
     return success(res, {
-      channels: list,
+      zones,
+      // Only a super admin has a choice to make; an admin's single zone is
+      // fixed, so the app shows it rather than offering a picker.
       canPickZones: req.userRole === 'super_admin',
     });
   } catch (err) {
     logger.error('getChannels error:', err);
-    return error(res, 'Failed to load channels', 500);
+    return error(res, 'Failed to load zones', 500);
   }
 };
 
@@ -77,21 +79,20 @@ const listBroadcasts = async (req, res) => {
     }
     // super_admin sees everything
 
-    const shaped = rows.slice(0, limit).map((m) => {
-      const ch = CHANNELS[m.channel_key];
-      return {
-        id: m.id,
-        channel_key: m.channel_key,
-        channel_name: ch ? ch.name : 'Announcement',
-        channel_emoji: ch ? ch.emoji : '📢',
-        zones: m.zones,
-        body: m.body,
-        links: m.links || [],
-        sender_name: m.sender_name,
-        sender_role: m.sender_role,
-        created_at: m.createdAt,
-      };
-    });
+    // A reader has no business knowing which other zones were addressed, or
+    // that zones exist at all — it is just an announcement to them. Staff do
+    // see the audience, since they need to check what went where.
+    const isStaff = req.userRole === 'admin' || req.userRole === 'super_admin';
+
+    const shaped = rows.slice(0, limit).map((m) => ({
+      id: m.id,
+      body: m.body,
+      links: m.links || [],
+      sender_name: m.sender_name,
+      sender_role: m.sender_role,
+      created_at: m.createdAt,
+      ...(isStaff ? { zones: m.zones } : {}),
+    }));
 
     return success(res, shaped);
   } catch (err) {
@@ -106,7 +107,7 @@ const listBroadcasts = async (req, res) => {
  */
 const createBroadcast = async (req, res) => {
   try {
-    const { body, channelKey, zones } = req.body;
+    const { body, zones } = req.body;
 
     const text = (body || '').trim();
     if (text.length < 2) return error(res, 'Write a message first', 400);
@@ -114,12 +115,7 @@ const createBroadcast = async (req, res) => {
 
     let audience;
     try {
-      audience = resolveAudience({
-        role: req.userRole,
-        zone: req.user.zone,
-        channelKey,
-        zones,
-      });
+      audience = resolveAudience({ role: req.userRole, zone: req.user.zone, zones });
     } catch (permErr) {
       return error(res, permErr.message, 403);
     }
@@ -127,7 +123,8 @@ const createBroadcast = async (req, res) => {
     const links = extractLinks(text);
 
     const msg = await BroadcastMessage.create({
-      channel_key: audience.channelKey,
+      // Retained for storage compatibility; the audience is the zone list.
+      channel_key: 'zones',
       zones: audience.zones,
       body: text,
       links,
@@ -136,12 +133,11 @@ const createBroadcast = async (req, res) => {
       sender_role: req.userRole,
     });
 
-    const ch = CHANNELS[audience.channelKey];
-    // Push is fire-and-forget: a notification failure must not undo a message
-    // that is already saved and visible in the feed.
+    // The title stays generic — a reader should not be told which zone bucket
+    // they fell into.
     notifyZones(
       audience.zones,
-      `${ch?.emoji || '📢'} ${ch?.name || 'Announcement'}`,
+      '📢 Announcement',
       text.length > 140 ? `${text.slice(0, 137)}...` : text,
       { screen: 'broadcast' },
     ).catch((e) => logger.warn('notifyZones failed:', e.message));
@@ -152,7 +148,6 @@ const createBroadcast = async (req, res) => {
 
     return success(res, {
       id: msg.id,
-      channel_key: audience.channelKey,
       zones: audience.zones,
       links,
     }, `Sent to ${audience.zones.length} zone${audience.zones.length > 1 ? 's' : ''}`, 201);

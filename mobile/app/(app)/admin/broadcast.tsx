@@ -11,14 +11,9 @@ import api from '../../../src/services/api';
 import { ENDPOINTS } from '../../../src/constants/api';
 import { useAuthStore } from '../../../src/store/authStore';
 
-type Channel = {
-  key: string; name: string; emoji: string; description: string; zones: string[];
-};
-
 type Sent = {
-  id: string; channel_name: string; channel_emoji: string; zones: string[];
-  body: string; links: string[]; sender_name: string;
-  sender_role: 'admin' | 'super_admin'; created_at: string;
+  id: string; zones: string[]; body: string; links: string[];
+  sender_name: string; sender_role: 'admin' | 'super_admin'; created_at: string;
 };
 
 const MAX = 2000;
@@ -27,10 +22,9 @@ export default function AdminBroadcast() {
   const activeRole = useAuthStore((s) => s.activeRole);
   const isSuperAdmin = activeRole === 'super_admin';
 
-  const [channels, setChannels] = useState<Channel[]>([]);
+  /** Zones this account is allowed to address. An admin gets exactly one. */
+  const [allowedZones, setAllowedZones] = useState<string[]>([]);
   const [canPickZones, setCanPickZones] = useState(false);
-  const [channelKey, setChannelKey] = useState<string | null>(null);
-  /** Super admin only: hand-picked zones, which override the preset. */
   const [pickedZones, setPickedZones] = useState<string[]>([]);
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
@@ -45,14 +39,15 @@ export default function AdminBroadcast() {
         api.get(ENDPOINTS.BROADCAST_CHANNELS),
         api.get(ENDPOINTS.BROADCASTS),
       ]);
-      const list: Channel[] = chRes.data.data.channels || [];
-      setChannels(list);
-      setCanPickZones(!!chRes.data.data.canPickZones);
-      // A zone admin has exactly one channel, so pre-select it.
-      setChannelKey((prev) => prev ?? (list.length === 1 ? list[0].key : null));
+      const zones: string[] = chRes.data.data.zones || [];
+      const canPick = !!chRes.data.data.canPickZones;
+      setAllowedZones(zones);
+      setCanPickZones(canPick);
+      // A zone admin has no choice to make, so their single zone is the target.
+      if (!canPick) setPickedZones(zones);
       setSent(listRes.data.data || []);
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Could not load channels' });
+      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Could not load zones' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -61,14 +56,15 @@ export default function AdminBroadcast() {
 
   useEffect(() => { load(); }, [load]);
 
-  const usingPickedZones = canPickZones && pickedZones.length > 0;
-  const targetChannel = channels.find((c) => c.key === channelKey);
-  const targetZones = usingPickedZones ? pickedZones : (targetChannel?.zones || []);
+  const targetZones = pickedZones;
   const canSend = body.trim().length >= 2 && targetZones.length > 0 && !sending;
 
   const toggleZone = (z: string) => {
     setPickedZones((prev) => (prev.includes(z) ? prev.filter((x) => x !== z) : [...prev, z]));
   };
+
+  const allSelected = canPickZones && allowedZones.length > 0
+    && allowedZones.every((z) => pickedZones.includes(z));
 
   const send = () => {
     const zoneLabels = targetZones
@@ -85,14 +81,14 @@ export default function AdminBroadcast() {
           onPress: async () => {
             try {
               setSending(true);
-              const payload: any = { body: body.trim() };
-              if (usingPickedZones) payload.zones = pickedZones;
-              else payload.channelKey = channelKey;
-
-              const res = await api.post(ENDPOINTS.BROADCASTS, payload);
+              const res = await api.post(ENDPOINTS.BROADCASTS, {
+                body: body.trim(),
+                zones: pickedZones,
+              });
               Toast.show({ type: 'success', text1: 'Announcement sent', text2: res.data?.message });
               setBody('');
-              setPickedZones([]);
+              // A zone admin's target is fixed, so keep it selected.
+              if (canPickZones) setPickedZones([]);
               load();
             } catch (err: any) {
               Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Could not send' });
@@ -143,41 +139,20 @@ export default function AdminBroadcast() {
           <Text style={st.title}>📢 Broadcast</Text>
           <Text style={st.subtitle}>
             {isSuperAdmin
-              ? 'Send an announcement to any channel, or pick zones yourself.'
-              : 'Send an announcement to your zone.'}
+              ? 'Pick the zones that should receive this, then write your message.'
+              : 'Send an announcement to everyone in your zone.'}
           </Text>
 
-          {/* Channel */}
-          <Text style={st.label}>Channel</Text>
-          {channels.length === 0 ? (
-            <Text style={st.warn}>Your account has no zone, so there is nothing to broadcast to.</Text>
-          ) : (
-            <View style={st.chipWrap}>
-              {channels.map((c) => {
-                const on = !usingPickedZones && channelKey === c.key;
-                return (
-                  <TouchableOpacity
-                    key={c.key}
-                    onPress={() => { setChannelKey(c.key); setPickedZones([]); }}
-                    style={[st.chip, on && st.chipOn]}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[st.chipTxt, on && st.chipTxtOn]}>{c.emoji} {c.name}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-          {targetChannel && !usingPickedZones && (
-            <Text style={st.hint}>{targetChannel.description}</Text>
-          )}
+          {/* Audience — zones are picked directly, there are no presets */}
+          <Text style={st.label}>{canPickZones ? 'Send to' : 'Your zone'}</Text>
 
-          {/* Super admin can bypass the presets entirely */}
-          {canPickZones && (
+          {allowedZones.length === 0 ? (
+            <Text style={st.warn}>Your account has no zone, so there is nothing to broadcast to.</Text>
+          ) : canPickZones ? (
             <>
-              <Text style={st.label}>Or pick zones</Text>
               <View style={st.chipWrap}>
-                {(Object.keys(ZONE_CONFIG) as (keyof typeof ZONE_CONFIG)[]).map((z) => {
+                {allowedZones.map((z) => {
+                  const cfg = (ZONE_CONFIG as any)[z];
                   const on = pickedZones.includes(z);
                   return (
                     <TouchableOpacity
@@ -185,24 +160,37 @@ export default function AdminBroadcast() {
                       onPress={() => toggleZone(z)}
                       style={[
                         st.chip,
-                        on && { borderColor: ZONE_CONFIG[z].color, backgroundColor: ZONE_CONFIG[z].color + '22' },
+                        on && { borderColor: cfg?.color, backgroundColor: (cfg?.color || COLORS.primary) + '22' },
                       ]}
                       activeOpacity={0.85}
                     >
-                      <Text style={[st.chipTxt, on && { color: ZONE_CONFIG[z].color, fontWeight: '700' }]}>
-                        {ZONE_CONFIG[z].emoji} {ZONE_CONFIG[z].label}
+                      <Text style={[st.chipTxt, on && { color: cfg?.color, fontWeight: '700' }]}>
+                        {on ? '✓ ' : ''}{cfg?.emoji} {cfg?.label || z}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-              {usingPickedZones && (
-                <Text style={st.hint}>
-                  Using your picked zones instead of a channel.{' '}
-                  <Text style={st.clear} onPress={() => setPickedZones([])}>Clear</Text>
+
+              <TouchableOpacity
+                onPress={() => setPickedZones(allSelected ? [] : [...allowedZones])}
+                activeOpacity={0.75}
+                style={{ marginTop: 10 }}
+              >
+                <Text style={st.selectAll}>
+                  {allSelected ? 'Clear all' : 'Select all zones'}
                 </Text>
-              )}
+              </TouchableOpacity>
             </>
+          ) : (
+            /* A zone admin cannot choose — show what they will reach. */
+            <View style={st.fixedZone}>
+              <Text style={st.fixedZoneTxt}>
+                {(ZONE_CONFIG as any)[allowedZones[0]]?.emoji}{' '}
+                {(ZONE_CONFIG as any)[allowedZones[0]]?.label || allowedZones[0]}
+              </Text>
+              <Text style={st.fixedZoneSub}>You can only broadcast to your own zone.</Text>
+            </View>
           )}
 
           {/* Message */}
@@ -248,7 +236,13 @@ export default function AdminBroadcast() {
             sent.map((m) => (
               <View key={m.id} style={st.sentCard}>
                 <View style={st.sentTop}>
-                  <Text style={st.sentChannel}>{m.channel_emoji} {m.channel_name}</Text>
+                  {/* Staff still see the audience — they need to check what
+                      went where. Readers never do. */}
+                  <Text style={st.sentChannel} numberOfLines={1}>
+                    {(m.zones || [])
+                      .map((z) => (ZONE_CONFIG as any)[z]?.label || z)
+                      .join(' · ') || 'Announcement'}
+                  </Text>
                   <TouchableOpacity onPress={() => remove(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="trash-outline" size={15} color={COLORS.accentRed} />
                   </TouchableOpacity>
@@ -272,6 +266,14 @@ export default function AdminBroadcast() {
 }
 
 const st = StyleSheet.create({
+  selectAll: { color: COLORS.primary, fontSize: 12.5, fontWeight: '700', textDecorationLine: 'underline' },
+  fixedZone: {
+    marginTop: 10, borderRadius: SIZES.radius.md, borderWidth: 1,
+    borderColor: COLORS.border, backgroundColor: COLORS.backgroundSecondary,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  fixedZoneTxt: { color: COLORS.textPrimary, fontSize: 14.5, fontWeight: '700' },
+  fixedZoneSub: { color: COLORS.textMuted, fontSize: 11.5, marginTop: 4 },
   container: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: SIZES.spacing.base, paddingTop: 16, paddingBottom: 60 },
@@ -313,7 +315,7 @@ const st = StyleSheet.create({
     padding: SIZES.spacing.md, marginTop: SIZES.spacing.sm,
   },
   sentTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sentChannel: { color: COLORS.primary, fontSize: 11.5, fontWeight: '700' },
+  sentChannel: { color: COLORS.primary, fontSize: 11.5, fontWeight: '700', flex: 1, marginRight: 8 },
   sentBody: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 19, marginTop: 8 },
   sentLinks: { color: COLORS.textMuted, fontSize: 11, marginTop: 6 },
   sentMeta: { color: COLORS.textMuted, fontSize: 10.5, marginTop: 8 },

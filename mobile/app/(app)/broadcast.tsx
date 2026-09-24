@@ -14,10 +14,6 @@ import { ENDPOINTS } from '../../src/constants/api';
 
 type Broadcast = {
   id: string;
-  channel_key: string;
-  channel_name: string;
-  channel_emoji: string;
-  zones: string[];
   body: string;
   links: string[];
   sender_name: string;
@@ -125,10 +121,10 @@ export default function BroadcastFeed() {
         ) : (
           items.map((m) => (
             <View key={m.id} style={st.card}>
+              {/* No channel or zone shown — to the reader this is simply an
+                  announcement, not a bucket they were sorted into. */}
               <View style={st.cardTop}>
-                <View style={st.channelPill}>
-                  <Text style={st.channelTxt}>{m.channel_emoji} {m.channel_name}</Text>
-                </View>
+                <Text style={st.announceTag}>📢 Announcement</Text>
                 <Text style={st.time}>{relative(m.created_at)}</Text>
               </View>
 
@@ -177,12 +173,7 @@ const st = StyleSheet.create({
     marginBottom: SIZES.spacing.sm,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  channelPill: {
-    backgroundColor: 'rgba(201,168,76,0.14)',
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.35)',
-    borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
-  },
-  channelTxt: { color: COLORS.primary, fontSize: 10.5, fontWeight: '700' },
+  announceTag: { color: COLORS.primary, fontSize: 11, fontWeight: '700' },
   time: { color: COLORS.textMuted, fontSize: 10.5 },
   body: { color: COLORS.textPrimary, fontSize: 14.5, lineHeight: 22, marginTop: 10 },
   link: {

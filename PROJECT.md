@@ -237,27 +237,25 @@ Presented as three numbered steps, in the order the donor actually works through
 
 ### 8a. Broadcast Announcements
 
-One-way channels. Staff post, everyone in the target zones reads and gets a
-push. **No user can reply or send** — there is no such endpoint.
+One-way announcements. Staff send, everyone in the chosen zones reads and gets
+a push. **No user can reply or send** — there is no such endpoint.
 
-| Channel | Reaches |
+**Senders pick zones directly — there are no channel presets.**
+
+| Role | May address |
 |---|---|
-| 📢 All Zones | Everyone |
-| 👨 Boys Channel | Masjid + Boys Hostel + Stanza (everything except girls) |
-| 🌸 Girls Channel | Girls zone |
-| 🕌 / 🏠 / 🏡 Per-zone | That single zone |
+| Super admin | Any combination of the four zones, with a *Select all* shortcut |
+| Zone admin | Their own zone only — nothing to pick, it is shown as fixed |
 
-- **Super admin** — any channel, or hand-pick zones. A hand-picked set that
-  happens to match a preset collapses to that preset's name in the feed.
-- **Zone admin** — their own zone only. `resolveAudience()` in
-  `constants/channels.js` is the single enforcement point: passing a wider
-  `channelKey` is rejected with 403, and passing an explicit `zones` array is
-  clamped to their own zone rather than honoured.
+`resolveAudience()` in `constants/channels.js` is the single enforcement point.
+An admin passing someone else's zone is **clamped to their own**, not honoured;
+a super admin sending an empty selection is rejected.
 
-Audience is stored as the **resolved zone list** on each message, not a channel
-id, so a message's reach can never change retroactively. Membership needs no
-table — a user's `zone` alone decides what they see, so moving zones updates
-their channels immediately.
+**Readers are told nothing about zones.** The feed returns only body, links,
+sender and time — no `zones` field at all for role `user`, and the push title
+is a plain "📢 Announcement". A reader should not learn which bucket they fell
+into, or that buckets exist. Staff *do* get the zone list, since they need to
+check what went where.
 
 **Text and links only.** There is no upload path, and `extractLinks()` drops
 anything pointing at an image/video file and anything that is not `http(s)` —

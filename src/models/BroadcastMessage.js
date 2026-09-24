@@ -4,13 +4,12 @@ const { sequelize } = require('../database/connection');
 /**
  * A one-way announcement from an admin to a set of zones.
  *
- * Audience is stored as the resolved list of zones rather than a channel id,
- * because that is what actually decides who sees a message. Channels are just
- * named presets over the same four zones (see CHANNELS below), so resolving at
- * send time means a message's reach never silently changes if a preset is
- * later edited.
+ * Audience is the resolved list of zones — the sender picks zones directly,
+ * there are no channel presets. Membership needs no table: a user's `zone`
+ * alone decides what they receive.
  *
- * Users can only read. Nothing here supports replies by design.
+ * Readers are never shown the zone list; to them it is simply an announcement.
+ * Users can only read — nothing here supports replies, by design.
  */
 const BroadcastMessage = sequelize.define('BroadcastMessage', {
   id: {
@@ -21,7 +20,8 @@ const BroadcastMessage = sequelize.define('BroadcastMessage', {
   channel_key: {
     type: DataTypes.STRING(32),
     allowNull: false,
-    comment: 'Preset used when sending — for grouping and display only',
+    defaultValue: 'zones',
+    comment: 'Legacy column, retained for storage compatibility',
   },
   zones: {
     type: DataTypes.JSON,
