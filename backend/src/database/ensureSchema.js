@@ -133,6 +133,17 @@ async function ensureSchema() {
       applied.push('created table map_markers');
     }
 
+    // Delivery order for the nightly route.
+    if (names.includes('map_markers')) {
+      const mm = await qi.describeTable('map_markers');
+      if (!mm.sequence) {
+        await sequelize.query(
+          'ALTER TABLE map_markers ADD COLUMN sequence INT NOT NULL DEFAULT 0',
+        );
+        applied.push('added map_markers.sequence');
+      }
+    }
+
     // First run only: carry across the addresses and pins that used to live in
     // the app bundle, so nothing disappears the moment this ships.
     const seed = require('./seedPlaces.json');
@@ -164,6 +175,37 @@ async function ensureSchema() {
     }
   } catch (err) {
     logger.error(`ensureSchema: places step failed — ${err.message}`);
+  }
+
+  // ── delivery_alerts + tracking geofence state ────────────────────────────
+  try {
+    const tables = await qi.showAllTables();
+    const names = tables.map((t) => (typeof t === 'string' ? t : t.tableName).toLowerCase());
+
+    if (!names.includes('delivery_alerts')) {
+      await require('../models/DeliveryAlert').sync();
+      applied.push('created table delivery_alerts');
+    }
+
+    // Per-rider state the geofence needs to spot the moment they leave the
+    // supplier point, rather than just that they are away from it.
+    const cols = await qi.describeTable('tracking');
+    if (!cols.geofence_date) {
+      await sequelize.query('ALTER TABLE tracking ADD COLUMN geofence_date DATE NULL');
+      applied.push('added tracking.geofence_date');
+    }
+    if (!cols.at_supplier) {
+      await sequelize.query(
+        'ALTER TABLE tracking ADD COLUMN at_supplier TINYINT(1) NOT NULL DEFAULT 0',
+      );
+      applied.push('added tracking.at_supplier');
+    }
+    if (!cols.left_supplier_at) {
+      await sequelize.query('ALTER TABLE tracking ADD COLUMN left_supplier_at DATETIME NULL');
+      applied.push('added tracking.left_supplier_at');
+    }
+  } catch (err) {
+    logger.error(`ensureSchema: delivery_alerts step failed — ${err.message}`);
   }
 
   if (applied.length) {

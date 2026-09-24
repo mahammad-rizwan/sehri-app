@@ -11,7 +11,7 @@ import { SYMBOL_META, SYMBOL_KEYS, type MapSymbol } from '../../../src/constants
 import MapPicker from '../../../src/components/admin/MapPicker';
 import {
   fetchAddresses, createAddress, updateAddress, deleteAddress,
-  fetchMapMarkers, createMarker, updateMarker, deleteMarker,
+  fetchMapMarkers, createMarker, updateMarker, deleteMarker, reorderMarkers,
   type ZoneAddress, type MapMarkerRow,
 } from '../../../src/services/places';
 
@@ -206,6 +206,38 @@ export default function PlacesManagement() {
     }
   };
 
+  /**
+   * Moves a stop one place up or down the route.
+   *
+   * The list is reordered locally first so the tap feels instant, then the whole
+   * order is sent and the server renumbers. On failure we reload, which snaps
+   * back to the truth rather than leaving the screen lying.
+   */
+  const [savingOrder, setSavingOrder] = useState(false);
+
+  const moveStop = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= stops.length || savingOrder) return;
+
+    const next = [...stops];
+    [next[index], next[target]] = [next[target], next[index]];
+    // Renumber locally so the badges update with the rows.
+    setMarkers((prev) => {
+      const bySeq = new Map(next.map((m, i) => [m.id, i + 1]));
+      return prev.map((m) => (bySeq.has(m.id) ? { ...m, sequence: bySeq.get(m.id)! } : m));
+    });
+
+    try {
+      setSavingOrder(true);
+      await reorderMarkers(next.map((m) => m.id));
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Could not save the order' });
+      await load();
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
   /* ── Render ─────────────────────────────────────────────────────────── */
   if (loading) {
     return (
@@ -216,6 +248,13 @@ export default function PlacesManagement() {
   }
 
   const byZone = ZONES.map((z) => ({ ...z, rows: addresses.filter((a) => a.zone === z.key) }));
+
+  // The run starts at the distribution point(s); everything else is a numbered
+  // stop on the route, in the order the rider visits them.
+  const startPoints = markers.filter((m) => m.symbol === 'distributor');
+  const stops = markers
+    .filter((m) => m.symbol !== 'distributor')
+    .sort((a, b) => a.sequence - b.sequence);
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={st.container}>
@@ -301,39 +340,51 @@ export default function PlacesManagement() {
               <Text style={[st.empty, { marginTop: SIZES.spacing.lg }]}>
                 No pins yet. The delivery map will be empty until you add some.
               </Text>
-            ) : markers.map((m) => {
-              const meta = SYMBOL_META[m.symbol as MapSymbol] || SYMBOL_META.distributor;
-              return (
-                <View key={m.id} style={[st.row, { marginTop: SIZES.spacing.sm }, !m.is_active && st.rowOff]}>
-                  <View style={[st.dot, { backgroundColor: meta.color }]}>
-                    <Text style={st.dotTxt}>{meta.emoji}</Text>
+            ) : (
+              <>
+                {/* Where the run begins */}
+                {startPoints.length > 0 && (
+                  <View style={{ marginTop: SIZES.spacing.lg }}>
+                    <Text style={st.section}>START · DISTRIBUTION POINT</Text>
+                    {startPoints.map((m) => (
+                      <MarkerRow
+                        key={m.id} m={m} badge="◉"
+                        onToggle={() => toggleMarker(m)}
+                        onEdit={() => openMarker(m)}
+                        onDelete={() => removeMarker(m)}
+                      />
+                    ))}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[st.rowName, !m.is_active && { color: COLORS.textMuted }]}>{m.label}</Text>
-                    <Text style={st.rowMeta}>
-                      {meta.label} · {m.latitude.toFixed(5)}, {m.longitude.toFixed(5)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity style={st.iconBtn} onPress={() => toggleMarker(m)}>
-                    <Ionicons
-                      name={m.is_active ? 'eye-outline' : 'eye-off-outline'}
-                      size={18}
-                      color={m.is_active ? COLORS.accentGreen : COLORS.textMuted}
+                )}
+
+                {/* The route, in the order the rider drives it */}
+                <View style={{ marginTop: SIZES.spacing.lg }}>
+                  <Text style={st.section}>DELIVERY ORDER · {stops.length} STOPS</Text>
+                  <Text style={st.orderHint}>
+                    The rider visits these in this order after leaving the distribution point.
+                    Use the arrows to change it.
+                  </Text>
+                  {stops.length === 0 ? (
+                    <Text style={st.empty}>No delivery stops yet.</Text>
+                  ) : stops.map((m, i) => (
+                    <MarkerRow
+                      key={m.id} m={m} badge={String(i + 1)}
+                      onToggle={() => toggleMarker(m)}
+                      onEdit={() => openMarker(m)}
+                      onDelete={() => removeMarker(m)}
+                      onUp={i > 0 ? () => moveStop(i, -1) : undefined}
+                      onDown={i < stops.length - 1 ? () => moveStop(i, 1) : undefined}
+                      busy={savingOrder}
                     />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={st.iconBtn} onPress={() => openMarker(m)}>
-                    <Ionicons name="create-outline" size={18} color={COLORS.primary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={st.iconBtn} onPress={() => removeMarker(m)}>
-                    <Ionicons name="trash-outline" size={18} color={COLORS.accentRed} />
-                  </TouchableOpacity>
+                  ))}
                 </View>
-              );
-            })}
+              </>
+            )}
 
             <Text style={st.footNote}>
               The delivery map shows these pins and nothing else. Tapping one shows its name —
-              no zone, no address, no coordinates.
+              no zone, no address, no coordinates. The order here is the route the rider drives
+              every night, so it only needs setting once.
             </Text>
           </>
         )}
@@ -511,6 +562,70 @@ export default function PlacesManagement() {
   );
 }
 
+/**
+ * One marker row. Used for both the distribution point and the numbered stops,
+ * so the reorder arrows are optional — the start point has no position to move.
+ */
+function MarkerRow({
+  m, badge, onToggle, onEdit, onDelete, onUp, onDown, busy,
+}: {
+  m: MapMarkerRow;
+  badge: string;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onUp?: () => void;
+  onDown?: () => void;
+  busy?: boolean;
+}) {
+  const meta = SYMBOL_META[m.symbol as MapSymbol] || SYMBOL_META.distributor;
+  const showArrows = onUp !== undefined || onDown !== undefined;
+
+  return (
+    <View style={[st.row, { marginTop: SIZES.spacing.sm }, !m.is_active && st.rowOff]}>
+      <Text style={st.seqBadge}>{badge}</Text>
+
+      <View style={[st.dot, { backgroundColor: meta.color }]}>
+        <Text style={st.dotTxt}>{meta.emoji}</Text>
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <Text style={[st.rowName, !m.is_active && { color: COLORS.textMuted }]} numberOfLines={1}>
+          {m.label}
+        </Text>
+        <Text style={st.rowMeta}>
+          {meta.label} · {m.source === 'address' ? 'to the door' : m.symbol === 'distributor' ? 'pickup' : 'zone point'}
+        </Text>
+      </View>
+
+      {showArrows && (
+        <View style={st.arrows}>
+          <TouchableOpacity onPress={onUp} disabled={!onUp || busy} style={st.arrowBtn} hitSlop={6}>
+            <Ionicons name="chevron-up" size={17} color={onUp && !busy ? COLORS.primary : COLORS.border} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDown} disabled={!onDown || busy} style={st.arrowBtn} hitSlop={6}>
+            <Ionicons name="chevron-down" size={17} color={onDown && !busy ? COLORS.primary : COLORS.border} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <TouchableOpacity style={st.iconBtn} onPress={onToggle}>
+        <Ionicons
+          name={m.is_active ? 'eye-outline' : 'eye-off-outline'}
+          size={18}
+          color={m.is_active ? COLORS.accentGreen : COLORS.textMuted}
+        />
+      </TouchableOpacity>
+      <TouchableOpacity style={st.iconBtn} onPress={onEdit}>
+        <Ionicons name="create-outline" size={18} color={COLORS.primary} />
+      </TouchableOpacity>
+      <TouchableOpacity style={st.iconBtn} onPress={onDelete}>
+        <Ionicons name="trash-outline" size={18} color={COLORS.accentRed} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 const st = StyleSheet.create({
   container: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center' },
@@ -562,6 +677,13 @@ const st = StyleSheet.create({
     borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.8)',
   },
   dotTxt: { fontSize: 14 },
+  seqBadge: {
+    color: COLORS.primary, fontSize: 12, fontWeight: '800',
+    minWidth: 18, textAlign: 'center',
+  },
+  arrows: { justifyContent: 'center' },
+  arrowBtn: { paddingHorizontal: 2, paddingVertical: 1 },
+  orderHint: { color: COLORS.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 6 },
 
   footNote: { color: COLORS.textMuted, fontSize: 11.5, lineHeight: 18, marginTop: 22, paddingHorizontal: 4 },
 

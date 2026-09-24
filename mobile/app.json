@@ -75,7 +75,10 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#C9A84C"
+          "color": "#C9A84C",
+          "sounds": [
+            "./assets/sounds/sehri_alert.wav"
+          ]
         }
       ],
       [

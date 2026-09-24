@@ -21,7 +21,10 @@ import { COLORS, SIZES } from '../../constants/theme';
 import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
 
-const PUSH_INTERVAL_MS = 5000; // push GPS every 5 seconds
+const PUSH_INTERVAL_MS = 10000; // push GPS every 10 seconds
+// 10 s = 90 pushes per 15 min, inside riderPushLimiter's 250. Tightening
+// this means re-checking that limiter — at 5 s it was exceeding the old 100
+// and every run 429'd about eight minutes in.
 
 export default function RiderScreen() {
   const [riderId, setRiderId]       = useState('');

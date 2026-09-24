@@ -4,7 +4,14 @@ const logger = require('../utils/logger');
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
-async function sendPushNotification(expoPushToken, title, body, data = {}) {
+/**
+ * `opts.sound` names a sound file bundled in the app (without extension) so a
+ * delivery alert is audibly different from an ordinary notification. Android
+ * ignores it and takes the sound from the channel instead, so `opts.channelId`
+ * has to be sent alongside — the app registers a `sehri-delivery` channel whose
+ * sound is that same file. Omitting both gives the normal default beep.
+ */
+async function sendPushNotification(expoPushToken, title, body, data = {}, opts = {}) {
   const isValidToken = expoPushToken &&
     (expoPushToken.startsWith('ExponentPushToken') || expoPushToken.startsWith('ExpoPushToken'));
   if (!isValidToken) {
@@ -21,11 +28,16 @@ async function sendPushNotification(expoPushToken, title, body, data = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: expoPushToken,
-        sound: 'default',
+        // iOS plays this file; Android takes its sound from the channel.
+        sound: opts.sound || 'default',
         title,
         body,
-        data: { ...data, screen: 'poll' },
+        // `screen` stays the default so existing notifications keep opening the
+        // poll, but a caller can route somewhere else.
+        data: { screen: 'poll', ...data },
         priority: 'high',
+        ...(opts.channelId ? { channelId: opts.channelId } : {}),
+        ...(opts.interruptionLevel ? { interruptionLevel: opts.interruptionLevel } : {}),
       }),
       signal: controller.signal,
     });

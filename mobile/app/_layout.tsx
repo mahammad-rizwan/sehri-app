@@ -34,6 +34,8 @@ export default function RootLayout() {
         notifResponseListener.current = addNotificationResponseListener((screen, data) => {
           if (screen === 'chat' && data?.groupId) {
             router.push(`/(app)/admin/chat/${data.groupId}` as any);
+          } else if (screen === 'tracking') {
+            router.push('/(app)/tracking' as any);
           } else if (screen === 'poll') {
             router.push('/(app)/home' as any);
           }

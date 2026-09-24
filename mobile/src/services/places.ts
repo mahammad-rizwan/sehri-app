@@ -10,6 +10,8 @@ export type MapMarkerRow = {
   address_id: string | null;
   zone: string | null;
   symbol: 'masjid' | 'boys_hostel' | 'stanza' | 'girls' | 'distributor';
+  /** Delivery order, 1 upwards. Distribution points are 0 — they start the run. */
+  sequence: number;
   latitude: number;
   longitude: number;
   is_active: boolean;
@@ -69,6 +71,12 @@ export async function createMarker(body: MarkerInput) {
 
 export async function updateMarker(id: string, body: Partial<MarkerInput> & { is_active?: boolean }) {
   const { data } = await api.patch(ENDPOINTS.MAP_MARKER_ONE(id), body);
+  return data;
+}
+
+/** Sends the full ordered id list; the server renumbers 1..n atomically. */
+export async function reorderMarkers(order: string[]) {
+  const { data } = await api.patch(ENDPOINTS.MAP_MARKERS_REORDER, { order });
   return data;
 }
 

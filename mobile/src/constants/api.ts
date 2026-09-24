@@ -80,6 +80,7 @@ export const ENDPOINTS = {
   ADDRESS_ONE: (id: string) => `/places/addresses/${id}`,
   MAP_MARKERS: '/places/markers',
   MAP_MARKER_ONE: (id: string) => `/places/markers/${id}`,
+  MAP_MARKERS_REORDER: '/places/markers/reorder',
 
   // App-wide settings (Ramadan mode)
   SETTINGS: '/settings',

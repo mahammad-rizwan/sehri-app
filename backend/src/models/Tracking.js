@@ -59,6 +59,24 @@ const Tracking = sequelize.define('Tracking', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+
+  // ─── Geofence state, reset at the start of each delivery night ───────────
+  geofence_date: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: 'Poll date the two fields below belong to',
+  },
+  at_supplier: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+    comment: 'Currently inside the supplier radius — used to detect departure',
+  },
+  left_supplier_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'When the "Sehri is on the way" alert went out',
+  },
 }, {
   tableName: 'tracking',
   indexes: [

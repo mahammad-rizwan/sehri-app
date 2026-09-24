@@ -1,4 +1,5 @@
 const { ZoneAddress, MapMarker } = require('../models');
+const { Op } = require('sequelize');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
 
@@ -133,7 +134,12 @@ const listMarkers = async (req, res) => {
     const includeInactive = req.query.all === '1' && req.userRole === 'super_admin';
     const where = includeInactive ? {} : { is_active: true };
 
-    const rows = await MapMarker.findAll({ where, order: [['created_at', 'ASC']] });
+    // Delivery order first, so the rider's route and the management list agree.
+    // Distribution points sit at sequence 0 and therefore come out first.
+    const rows = await MapMarker.findAll({
+      where,
+      order: [['sequence', 'ASC'], ['created_at', 'ASC']],
+    });
 
     return success(res, rows.map((m) => ({
       id: m.id,
@@ -142,6 +148,7 @@ const listMarkers = async (req, res) => {
       address_id: m.address_id,
       zone: m.zone,
       symbol: m.symbol,
+      sequence: m.sequence,
       // Decimals come back as strings from MySQL; the map wants numbers.
       latitude: Number(m.latitude),
       longitude: Number(m.longitude),
@@ -197,10 +204,19 @@ const createMarker = async (req, res) => {
       return error(res, e.message, 400);
     }
 
+    // New stops go to the end of the route; the super admin reorders from there.
+    // A distribution point is the start, not a stop, so it stays at 0.
+    let sequence = 0;
+    if (symbol !== 'distributor') {
+      const last = await MapMarker.max('sequence', { where: { symbol: { [Op.ne]: 'distributor' } } });
+      sequence = (Number(last) || 0) + 1;
+    }
+
     const row = await MapMarker.create({
       ...resolved,
       source,
       symbol,
+      sequence,
       latitude: Number(latitude),
       longitude: Number(longitude),
       created_by: req.user.id,
@@ -209,7 +225,7 @@ const createMarker = async (req, res) => {
     logger.info(`Map marker created: ${row.label} (${symbol}) by ${req.user.id}`);
 
     return success(res, {
-      id: row.id, label: row.label, symbol: row.symbol,
+      id: row.id, label: row.label, symbol: row.symbol, sequence: row.sequence,
       latitude: Number(row.latitude), longitude: Number(row.longitude),
     }, 'Marker added', 201);
   } catch (err) {
@@ -267,6 +283,51 @@ const updateMarker = async (req, res) => {
   }
 };
 
+/**
+ * PATCH /places/markers/reorder
+ *
+ * Takes the full ordered list of marker ids and renumbers them 1..n in one
+ * transaction. Sending the whole list rather than a single move keeps the
+ * numbering dense and makes a half-applied reorder impossible.
+ */
+const reorderMarkers = async (req, res) => {
+  const { order } = req.body;
+  if (!Array.isArray(order) || !order.length) {
+    return error(res, 'Send the full ordered list of marker ids', 400);
+  }
+
+  const t = await MapMarker.sequelize.transaction();
+  try {
+    const rows = await MapMarker.findAll({
+      where: { id: { [Op.in]: order } },
+      transaction: t,
+    });
+    if (rows.length !== order.length) {
+      await t.rollback();
+      return error(res, 'Some of those markers no longer exist — reload and try again', 409);
+    }
+
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    // Counted separately from the array index so the stops stay numbered 1..n
+    // even if the caller includes a distribution point in the list.
+    let stop = 0;
+    for (const id of order) {
+      const row = byId.get(id);
+      // A distribution point is the start of the route, never a numbered stop.
+      const next = row.symbol === 'distributor' ? 0 : (stop += 1);
+      if (row.sequence !== next) await row.update({ sequence: next }, { transaction: t });
+    }
+
+    await t.commit();
+    logger.info(`Delivery order updated by ${req.user.id} (${order.length} markers)`);
+    return success(res, { count: order.length }, 'Delivery order saved');
+  } catch (err) {
+    await t.rollback();
+    logger.error('reorderMarkers error:', err);
+    return error(res, 'Failed to save the delivery order', 500);
+  }
+};
+
 const deleteMarker = async (req, res) => {
   try {
     const row = await MapMarker.findByPk(req.params.id);
@@ -282,6 +343,6 @@ const deleteMarker = async (req, res) => {
 
 module.exports = {
   listAddresses, createAddress, updateAddress, deleteAddress,
-  listMarkers, createMarker, updateMarker, deleteMarker,
+  listMarkers, createMarker, updateMarker, deleteMarker, reorderMarkers,
   ZONES, ZONE_LABELS,
 };

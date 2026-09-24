@@ -12,7 +12,7 @@ import { ENDPOINTS } from '../../constants/api';
 import DeliveryMap from '../../components/map/DeliveryMap';
 import { MAP_LEGEND } from '../../constants/mapData';
 
-const POLL_MS   = 20000;
+const POLL_MS   = 10000; // matches the rider's push interval
 
 const DEFAULT_LAT = 12.9141;
 const DEFAULT_LNG = 77.4822;

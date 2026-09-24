@@ -48,6 +48,28 @@ export async function registerForPushNotifications() {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#C9A84C',
       });
+
+      /**
+       * Delivery alerts get their own channel, because on Android the sound is
+       * a property of the channel — a push cannot override it. The backend
+       * sends `channelId: 'sehri-delivery'` so these arrive with the chime
+       * instead of the phone's default notification tone.
+       *
+       * MAX rather than HIGH: these fire at ~3 AM and the whole point is to
+       * wake someone who is asleep and expecting food.
+       *
+       * Android caches channel settings after the first creation, so changing
+       * the sound later needs a new channel id — the app cannot edit this one.
+       */
+      await Notifications.setNotificationChannelAsync('sehri-delivery', {
+        name: 'Sehri Delivery Alerts',
+        description: 'Tells you when your Sehri leaves the kitchen and when it reaches you.',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'sehri_alert.wav',
+        vibrationPattern: [0, 400, 200, 400],
+        lightColor: '#C9A84C',
+        bypassDnd: true,
+      });
     }
 
     const projectId =
@@ -123,6 +145,9 @@ export function addNotificationResponseListener(handler: (screen?: string, data?
     const data = response.notification.request.content.data;
     if (data?.screen === 'chat' && data?.groupId) {
       handler('chat', { groupId: data.groupId });
+    } else if (data?.screen === 'tracking') {
+      // Delivery alerts open live tracking, so they can see where the rider is.
+      handler('tracking');
     } else if (data?.screen === 'poll') {
       handler('poll');
     }
