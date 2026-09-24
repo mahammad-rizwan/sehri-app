@@ -231,7 +231,23 @@ export default function PlacesManagement() {
       setSavingOrder(true);
       await reorderMarkers(next.map((m) => m.id));
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Could not save the order' });
+      /**
+       * A 404 here means the server has no `/markers/reorder` route, so the
+       * request fell through to `/markers/:id` with id="reorder" and came back
+       * as "Marker not found" — which reads like the pin is missing when the
+       * real cause is a backend that predates this feature. Say that instead.
+       */
+      const status = err?.response?.status;
+      const raw = err?.response?.data?.message;
+      const stale = status === 404;
+
+      Toast.show({
+        type: 'error',
+        text1: stale ? 'Server needs updating' : (raw || 'Could not save the order'),
+        text2: stale
+          ? 'Delivery order needs the latest backend deployed. Nothing was changed.'
+          : undefined,
+      });
       await load();
     } finally {
       setSavingOrder(false);
