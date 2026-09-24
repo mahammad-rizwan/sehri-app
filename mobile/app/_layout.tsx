@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -60,7 +61,9 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+    // Gesture Handler needs this at the root or none of its gestures fire on
+    // Android — used by the drag-to-reorder list in Zone & Map Management.
+    <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <StatusBar style="light" backgroundColor={COLORS.background} />
       <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
         <Stack.Screen name="index" />
@@ -69,6 +72,6 @@ export default function RootLayout() {
         <Stack.Screen name="(rider)" />
       </Stack>
       <Toast />
-    </View>
+    </GestureHandlerRootView>
   );
 }

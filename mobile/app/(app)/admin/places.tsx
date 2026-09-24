@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, SIZES } from '../../../src/constants/theme';
 import { SYMBOL_META, SYMBOL_KEYS, type MapSymbol } from '../../../src/constants/mapData';
 import MapPicker from '../../../src/components/admin/MapPicker';
+import DraggableStopList, { ROW_H } from '../../../src/components/admin/DraggableStopList';
 import {
   fetchAddresses, createAddress, updateAddress, deleteAddress,
   fetchMapMarkers, createMarker, updateMarker, deleteMarker, reorderMarkers,
@@ -214,6 +215,35 @@ export default function PlacesManagement() {
    * back to the truth rather than leaving the screen lying.
    */
   const [savingOrder, setSavingOrder] = useState(false);
+  const [pinSearch, setPinSearch] = useState('');
+  const [dragging, setDragging] = useState(false);
+
+  /**
+   * Commits a whole new order at once, which is what a drag produces. Shares the
+   * optimistic-then-verify path with the arrows: renumber locally so the badges
+   * update with the drop, then send; on failure reload rather than leave the
+   * screen showing an order the server rejected.
+   */
+  const commitOrder = async (next: MapMarkerRow[]) => {
+    setMarkers((prev) => {
+      const bySeq = new Map(next.map((m, i) => [m.id, i + 1]));
+      return prev.map((m) => (bySeq.has(m.id) ? { ...m, sequence: bySeq.get(m.id)! } : m));
+    });
+    try {
+      setSavingOrder(true);
+      await reorderMarkers(next.map((m) => m.id));
+    } catch (err: any) {
+      const stale = err?.response?.status === 404;
+      Toast.show({
+        type: 'error',
+        text1: stale ? 'Server needs updating' : (err?.response?.data?.message || 'Could not save the order'),
+        text2: stale ? 'Delivery order needs the latest backend deployed. Nothing was changed.' : undefined,
+      });
+      await load();
+    } finally {
+      setSavingOrder(false);
+    }
+  };
 
   const moveStop = async (index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -221,37 +251,7 @@ export default function PlacesManagement() {
 
     const next = [...stops];
     [next[index], next[target]] = [next[target], next[index]];
-    // Renumber locally so the badges update with the rows.
-    setMarkers((prev) => {
-      const bySeq = new Map(next.map((m, i) => [m.id, i + 1]));
-      return prev.map((m) => (bySeq.has(m.id) ? { ...m, sequence: bySeq.get(m.id)! } : m));
-    });
-
-    try {
-      setSavingOrder(true);
-      await reorderMarkers(next.map((m) => m.id));
-    } catch (err: any) {
-      /**
-       * A 404 here means the server has no `/markers/reorder` route, so the
-       * request fell through to `/markers/:id` with id="reorder" and came back
-       * as "Marker not found" — which reads like the pin is missing when the
-       * real cause is a backend that predates this feature. Say that instead.
-       */
-      const status = err?.response?.status;
-      const raw = err?.response?.data?.message;
-      const stale = status === 404;
-
-      Toast.show({
-        type: 'error',
-        text1: stale ? 'Server needs updating' : (raw || 'Could not save the order'),
-        text2: stale
-          ? 'Delivery order needs the latest backend deployed. Nothing was changed.'
-          : undefined,
-      });
-      await load();
-    } finally {
-      setSavingOrder(false);
-    }
+    await commitOrder(next);
   };
 
   /* ── Render ─────────────────────────────────────────────────────────── */
@@ -271,6 +271,16 @@ export default function PlacesManagement() {
   const stops = markers
     .filter((m) => m.symbol !== 'distributor')
     .sort((a, b) => a.sequence - b.sequence);
+
+  /**
+   * Search narrows what is listed, but `stops` above stays whole — the delivery
+   * order is a property of the full route, so positions and reordering are both
+   * worked out against it, never against the filtered view.
+   */
+  const pinQuery = pinSearch.trim().toLowerCase();
+  const matches = (m: MapMarkerRow) => !pinQuery || m.label.toLowerCase().includes(pinQuery);
+  const shownStarts = startPoints.filter(matches);
+  const shownStops = stops.filter(matches);
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={st.container}>
@@ -299,6 +309,8 @@ export default function PlacesManagement() {
 
       <ScrollView
         contentContainerStyle={st.scroll}
+        // A row in the air must not fight the scroll view for the gesture.
+        scrollEnabled={!dragging}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={COLORS.primary} />
         }
@@ -352,17 +364,41 @@ export default function PlacesManagement() {
               <Text style={st.addBtnTxt}>Add Map Pin</Text>
             </TouchableOpacity>
 
+            {/* Search — same bar as User Management / Manage Admins */}
+            {markers.length > 3 && (
+              <View style={[st.searchBar, { marginHorizontal: 0, marginTop: SIZES.spacing.md }]}>
+                <Ionicons name="search-outline" size={16} color="#8892A0" />
+                <TextInput
+                  style={st.searchInput}
+                  placeholder="Search pins by name..."
+                  placeholderTextColor="#8892A0"
+                  value={pinSearch}
+                  onChangeText={setPinSearch}
+                  autoCorrect={false}
+                />
+                {pinSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setPinSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={16} color="#8892A0" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
             {markers.length === 0 ? (
               <Text style={[st.empty, { marginTop: SIZES.spacing.lg }]}>
                 No pins yet. The delivery map will be empty until you add some.
               </Text>
+            ) : pinQuery && !shownStarts.length && !shownStops.length ? (
+              <Text style={[st.empty, { marginTop: SIZES.spacing.lg }]}>
+                No pin matches “{pinSearch.trim()}”.
+              </Text>
             ) : (
               <>
                 {/* Where the run begins */}
-                {startPoints.length > 0 && (
+                {shownStarts.length > 0 && (
                   <View style={{ marginTop: SIZES.spacing.lg }}>
                     <Text style={st.section}>START · DISTRIBUTION POINT</Text>
-                    {startPoints.map((m) => (
+                    {shownStarts.map((m) => (
                       <MarkerRow
                         key={m.id} m={m} badge="◉"
                         onToggle={() => toggleMarker(m)}
@@ -374,26 +410,54 @@ export default function PlacesManagement() {
                 )}
 
                 {/* The route, in the order the rider drives it */}
-                <View style={{ marginTop: SIZES.spacing.lg }}>
-                  <Text style={st.section}>DELIVERY ORDER · {stops.length} STOPS</Text>
-                  <Text style={st.orderHint}>
-                    The rider visits these in this order after leaving the distribution point.
-                    Use the arrows to change it.
-                  </Text>
-                  {stops.length === 0 ? (
-                    <Text style={st.empty}>No delivery stops yet.</Text>
-                  ) : stops.map((m, i) => (
-                    <MarkerRow
-                      key={m.id} m={m} badge={String(i + 1)}
-                      onToggle={() => toggleMarker(m)}
-                      onEdit={() => openMarker(m)}
-                      onDelete={() => removeMarker(m)}
-                      onUp={i > 0 ? () => moveStop(i, -1) : undefined}
-                      onDown={i < stops.length - 1 ? () => moveStop(i, 1) : undefined}
-                      busy={savingOrder}
-                    />
-                  ))}
-                </View>
+                {shownStops.length > 0 && (
+                  <View style={{ marginTop: SIZES.spacing.lg }}>
+                    <Text style={st.section}>
+                      DELIVERY ORDER · {pinQuery ? `${shownStops.length} OF ${stops.length}` : `${stops.length} STOPS`}
+                    </Text>
+                    <Text style={st.orderHint}>
+                      {pinQuery
+                        ? 'Showing matches only. Numbers are the real position on the route — clear the search to change the order.'
+                        : 'Press and hold a stop, then drag it where you want it. The arrows move one place at a time.'}
+                    </Text>
+
+                    {pinQuery ? (
+                      /* Filtered: read-only order. Dragging or stepping a stop
+                         past hidden neighbours would renumber a subset of the
+                         route and there would be no way to see what moved. */
+                      shownStops.map((m) => {
+                        const i = stops.findIndex((x) => x.id === m.id);
+                        return (
+                          <MarkerRow
+                            key={m.id} m={m} badge={String(i + 1)} height={ROW_H}
+                            onToggle={() => toggleMarker(m)}
+                            onEdit={() => openMarker(m)}
+                            onDelete={() => removeMarker(m)}
+                          />
+                        );
+                      })
+                    ) : (
+                      <DraggableStopList
+                        items={stops}
+                        onReorder={commitOrder}
+                        onDragStateChange={setDragging}
+                        disabled={savingOrder}
+                        renderItem={(m, i, isDragging) => (
+                          <MarkerRow
+                            m={m} badge={String(i + 1)} height={ROW_H} grip
+                            dragging={isDragging}
+                            onToggle={() => toggleMarker(m)}
+                            onEdit={() => openMarker(m)}
+                            onDelete={() => removeMarker(m)}
+                            onUp={i > 0 ? () => moveStop(i, -1) : undefined}
+                            onDown={i < stops.length - 1 ? () => moveStop(i, 1) : undefined}
+                            busy={savingOrder}
+                          />
+                        )}
+                      />
+                    )}
+                  </View>
+                )}
               </>
             )}
 
@@ -584,6 +648,7 @@ export default function PlacesManagement() {
  */
 function MarkerRow({
   m, badge, onToggle, onEdit, onDelete, onUp, onDown, busy,
+  height, grip, dragging,
 }: {
   m: MapMarkerRow;
   badge: string;
@@ -593,12 +658,25 @@ function MarkerRow({
   onUp?: () => void;
   onDown?: () => void;
   busy?: boolean;
+  /** Fixed height, required when the row sits in the draggable list. */
+  height?: number;
+  /** Shows the grab handle, hinting the row can be held and dragged. */
+  grip?: boolean;
+  dragging?: boolean;
 }) {
   const meta = SYMBOL_META[m.symbol as MapSymbol] || SYMBOL_META.distributor;
   const showArrows = onUp !== undefined || onDown !== undefined;
 
   return (
-    <View style={[st.row, { marginTop: SIZES.spacing.sm }, !m.is_active && st.rowOff]}>
+    <View
+      style={[
+        st.row,
+        height ? { height, marginTop: 0 } : { marginTop: SIZES.spacing.sm },
+        !m.is_active && st.rowOff,
+        dragging && st.rowDragging,
+      ]}
+    >
+      {grip && <Ionicons name="reorder-three-outline" size={17} color={COLORS.textMuted} />}
       <Text style={st.seqBadge}>{badge}</Text>
 
       <View style={[st.dot, { backgroundColor: meta.color }]}>
@@ -677,6 +755,7 @@ const st = StyleSheet.create({
     paddingVertical: 11, paddingHorizontal: 13, marginBottom: 7,
   },
   rowOff: { opacity: 0.6, borderStyle: 'dashed' },
+  rowDragging: { borderColor: COLORS.primary, backgroundColor: '#15243A' },
   rowName: { color: COLORS.textPrimary, fontSize: 13.5, fontWeight: '600' },
   rowMeta: { color: COLORS.textMuted, fontSize: 10.5, marginTop: 3 },
   hiddenTag: { color: COLORS.accentOrange, fontSize: 10, marginTop: 3 },
@@ -700,6 +779,14 @@ const st = StyleSheet.create({
   arrows: { justifyContent: 'center' },
   arrowBtn: { paddingHorizontal: 2, paddingVertical: 1 },
   orderHint: { color: COLORS.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 6 },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: SIZES.spacing.base, marginBottom: SIZES.spacing.sm,
+    backgroundColor: COLORS.backgroundSecondary,
+    borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: SIZES.radius.md, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  searchInput: { flex: 1, color: '#F0E6C8', fontSize: 14 },
 
   footNote: { color: COLORS.textMuted, fontSize: 11.5, lineHeight: 18, marginTop: 22, paddingHorizontal: 4 },
 
