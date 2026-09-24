@@ -256,7 +256,6 @@ export default function AdminDashboard() {
                 <AdminAction icon="👥" title="Users" color={COLORS.accentOrange} badge={pendingUsers.length} onPress={() => router.push('/(app)/admin/users' as any)} />
                 <AdminAction icon="⭐" title="Special Cases" color={COLORS.accentOrange} badge={tomorrowStats?.specialCaseCount || 0} onPress={() => router.push('/(app)/admin/special-cases' as any)} />
                 <AdminAction icon="📝" title="Edit Requests" color={COLORS.accentOrange} badge={editRequests} onPress={() => router.push('/(app)/admin/profile-edit-requests' as any)} />
-                <AdminAction icon="📢" title="Broadcast" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/broadcast' as any)} />
                 <AdminAction icon="💬" title="Feedback" color={COLORS.accent} onPress={() => router.push('/(app)/admin/feedback' as any)} />
                 <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
                 <AdminAction icon="🛵" title="Riders" color={COLORS.accentGreen} onPress={() => router.push('/(app)/admin/tracking' as any)} />
@@ -269,6 +268,7 @@ export default function AdminDashboard() {
               <>
                 <AdminAction icon="👥" title="Zone Approvals" color={COLORS.accentOrange} badge={pendingUsers.length} onPress={() => router.push('/(app)/admin/users' as any)} />
                 <AdminAction icon="📝" title="Edit Requests" color={COLORS.accentOrange} badge={editRequests} onPress={() => router.push('/(app)/admin/profile-edit-requests' as any)} />
+                <AdminAction icon="📢" title="Broadcast" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/broadcast' as any)} />
                 <AdminAction icon="💬" title="Feedback" color={COLORS.accent} onPress={() => router.push('/(app)/admin/feedback' as any)} />
                 <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
                 <AdminAction icon="💬" title="Chat" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/chat' as any)} />

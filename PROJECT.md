@@ -247,6 +247,13 @@ a push. **No user can reply or send** — there is no such endpoint.
 | Super admin | Any combination of the four zones, with a *Select all* shortcut |
 | Zone admin | Their own zone only — nothing to pick, it is shown as fixed |
 
+Reached from **Dashboard → 📢 Broadcast**, available to both admin roles.
+
+**Deleting:** a super admin can remove any announcement, including one a zone
+admin sent. A zone admin can only remove their own. The feed carries a
+server-decided `can_delete` flag so the app hides the control rather than
+offering one that would 403.
+
 `resolveAudience()` in `constants/channels.js` is the single enforcement point.
 An admin passing someone else's zone is **clamped to their own**, not honoured;
 a super admin sending an empty selection is rejected.

@@ -14,6 +14,8 @@ import { useAuthStore } from '../../../src/store/authStore';
 type Sent = {
   id: string; zones: string[]; body: string; links: string[];
   sender_name: string; sender_role: 'admin' | 'super_admin'; created_at: string;
+  /** Server-decided: super admins may delete anything, admins only their own. */
+  can_delete?: boolean;
 };
 
 const MAX = 2000;
@@ -243,16 +245,18 @@ export default function AdminBroadcast() {
                       .map((z) => (ZONE_CONFIG as any)[z]?.label || z)
                       .join(' · ') || 'Announcement'}
                   </Text>
-                  <TouchableOpacity onPress={() => remove(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="trash-outline" size={15} color={COLORS.accentRed} />
-                  </TouchableOpacity>
+                  {m.can_delete && (
+                    <TouchableOpacity onPress={() => remove(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="trash-outline" size={15} color={COLORS.accentRed} />
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <Text style={st.sentBody} numberOfLines={4}>{m.body}</Text>
                 {m.links.length > 0 && (
                   <Text style={st.sentLinks}>🔗 {m.links.length} link{m.links.length > 1 ? 's' : ''}</Text>
                 )}
                 <Text style={st.sentMeta}>
-                  {m.sender_name} · {new Date(m.created_at).toLocaleString('en-IN', {
+                  {m.sender_name}{m.sender_role === 'super_admin' ? ' (Organiser)' : ''} · {new Date(m.created_at).toLocaleString('en-IN', {
                     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
                   })}
                 </Text>

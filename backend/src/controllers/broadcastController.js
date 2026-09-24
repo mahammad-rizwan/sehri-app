@@ -91,7 +91,13 @@ const listBroadcasts = async (req, res) => {
       sender_name: m.sender_name,
       sender_role: m.sender_role,
       created_at: m.createdAt,
-      ...(isStaff ? { zones: m.zones } : {}),
+      ...(isStaff ? {
+        zones: m.zones,
+        // Let the app hide the delete control rather than offer one that
+        // would 403. A super admin may remove anything, including a zone
+        // admin's announcement; an admin only their own.
+        can_delete: req.userRole === 'super_admin' || m.sender_id === req.user.id,
+      } : {}),
     }));
 
     return success(res, shaped);
