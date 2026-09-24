@@ -16,6 +16,7 @@ import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
 import Toast from 'react-native-toast-message';
 import ExpoGoNotice from '../../components/ui/ExpoGoNotice';
+import { getUnreadBroadcastCount } from '../../services/broadcastBadge';
 
 interface PrayerSlot { key: string; name: string; time: string; icon: string; color: string; }
 
@@ -320,31 +321,6 @@ function TomorrowPollCard({
             </View>
           )}
 
-          {sehriStatus?.zoneVoters && sehriStatus.zoneVoters.length > 0 && (
-            <View style={hs.specialCaseSection}>
-              <View style={hs.specialCaseHeader}>
-                <Ionicons name="people-outline" size={15} color={COLORS.primary} />
-                <Text style={hs.specialCaseLabel}>Who needs Sehri in your zone</Text>
-              </View>
-              {sehriStatus.zoneVoters.map((v: any) => (
-                <View key={v.id} style={hs.voterRowInline}>
-                  <View style={hs.voterAvatarInline}>
-                    <Text style={hs.voterAvatarTextInline}>{v.name?.charAt(0)?.toUpperCase() || '?'}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={hs.voterNameInline}>{v.name}</Text>
-                    {v.address ? <Text style={hs.closedText} numberOfLines={1}>{v.address}</Text> : null}
-                  </View>
-                  <Text style={{ color: COLORS.accentGreen, fontSize: 12, fontWeight: '700' }}>✅ Sehri</Text>
-                </View>
-              ))}
-            </View>
-          )}
-          {sehriStatus?.zoneVoters && sehriStatus.zoneVoters.length === 0 && (
-            <View style={hs.closedNotice}>
-              <Text style={hs.closedText}>No one from your zone needs Sehri today.</Text>
-            </View>
-          )}
         </View>
       )}
 
@@ -384,7 +360,8 @@ function TomorrowPollCard({
 }
 
 export default function HomeScreen() {
-  const { user, activeRole, isGuest } = useAuthStore();
+  const { user, activeRole, isGuest, ramadanActive } = useAuthStore();
+  const [unreadBroadcasts, setUnreadBroadcasts] = useState(0);
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [poll, setPoll] = useState<any>(null);
@@ -413,7 +390,8 @@ export default function HomeScreen() {
   const loadData = useCallback(async () => {
     // Guests have no token — every call below would 401. Prayer timings are a
     // public endpoint and load separately, so there is nothing to fetch here.
-    if (isGuest) return;
+    // Outside Ramadan there is no poll at all.
+    if (isGuest || !ramadanActive) return;
     try {
       const pollRes = await api.get(ENDPOINTS.ACTIVE_POLL);
       const d = pollRes.data.data;
@@ -443,12 +421,20 @@ export default function HomeScreen() {
         setDonationCount(donRes.data.data.total_donations || 0);
       } catch {}
     }
-  }, [activeRole, isGuest]);
+  }, [activeRole, isGuest, ramadanActive]);
 
   useEffect(() => { loadData(); }, []);
 
   // Auto-refresh when screen comes into focus (poll toggle, etc.)
   useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+
+  // Re-check on every focus so the badge clears as soon as they come back
+  // from reading the feed.
+  useFocusEffect(useCallback(() => {
+    useAuthStore.getState().refreshSettings();
+    if (isGuest) { setUnreadBroadcasts(0); return; }
+    getUnreadBroadcastCount().then(setUnreadBroadcasts);
+  }, [isGuest]));
 
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
@@ -540,7 +526,7 @@ export default function HomeScreen() {
           <PrayerHeroCard />
           <StarDivider />
 
-          {!isGuest && (
+          {!isGuest && ramadanActive && (
           <>
           <Text style={styles.sectionTitle}>🗳️ Today's Sehri Poll</Text>
           {poll ? (
@@ -590,11 +576,20 @@ export default function HomeScreen() {
             <ActionCard icon="🎁" title="Donate" subtitle="Support Sehri" color={COLORS.accentGreen} onPress={() => router.push('/(app)/donation')} />
             {/* Announcements are per-zone, so a guest has no feed to read. */}
             {!isGuest && (
-              <ActionCard icon="📢" title="Announcements" subtitle="Updates from admins" color={COLORS.accentPurple} onPress={() => router.push('/(app)/broadcast' as any)} />
+              <ActionCard
+                icon="📢"
+                title="Announcements"
+                subtitle={unreadBroadcasts > 0
+                  ? `${unreadBroadcasts} new update${unreadBroadcasts > 1 ? 's' : ''}`
+                  : 'Updates from admins'}
+                color={COLORS.accentPurple}
+                badge={unreadBroadcasts}
+                onPress={() => router.push('/(app)/broadcast' as any)}
+              />
             )}
             {/* Tracking is tied to the donor's delivery zone, so it stays
-                behind sign-in. Donating does not. */}
-            {!isGuest && (
+                behind sign-in — and there is nothing to track outside Ramadan. */}
+            {!isGuest && ramadanActive && (
               <ActionCard icon="🛵" title="Live Track" subtitle="Track your rider" color={COLORS.accent} onPress={() => router.push('/(app)/tracking')} />
             )}
           </View>
@@ -661,13 +656,19 @@ export default function HomeScreen() {
   );
 }
 
-function ActionCard({ icon, title, subtitle, color, onPress }: any) {
+function ActionCard({ icon, title, subtitle, color, onPress, badge }: any) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={styles.actionCard}>
       <LinearGradient colors={[`${color}22`, `${color}08`]} style={styles.actionCardGradient}>
         <View style={[styles.actionIconBg, { backgroundColor: `${color}20`, borderColor: `${color}40` }]}>
           <Text style={styles.actionIcon}>{icon}</Text>
         </View>
+        {/* Unread count — sits on the card corner so it reads at a glance */}
+        {badge > 0 && (
+          <View style={styles.actionBadge}>
+            <Text style={styles.actionBadgeTxt}>{badge > 99 ? '99+' : badge}</Text>
+          </View>
+        )}
         <Text style={styles.actionTitle}>{title}</Text>
         <Text style={styles.actionSubtitle}>{subtitle}</Text>
       </LinearGradient>
@@ -677,6 +678,15 @@ function ActionCard({ icon, title, subtitle, color, onPress }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  actionBadge: {
+    position: 'absolute', top: 8, right: 8,
+    minWidth: 20, height: 20, borderRadius: 10,
+    backgroundColor: COLORS.accentRed,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 1.5, borderColor: COLORS.background,
+  },
+  actionBadgeTxt: { color: '#fff', fontSize: 10.5, fontWeight: '800' },
   header: { paddingTop: RESPONSIVE.hp(7), paddingBottom: 16, overflow: 'hidden' },
   headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, marginTop: 8 },
   greetingBlock: { flex: 1, marginRight: 12 },
@@ -768,10 +778,6 @@ const hs = StyleSheet.create({
   zoneCountLabel: { color: COLORS.textSecondary, fontSize: 11 },
   viewVotersBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   viewVotersText: { color: COLORS.primary, fontSize: 13, fontWeight: '600' },
-  voterRowInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-  voterAvatarInline: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(201,168,76,0.15)' },
-  voterAvatarTextInline: { color: COLORS.primary, fontSize: 13, fontWeight: '800' },
-  voterNameInline: { color: COLORS.textPrimary, fontSize: 13, fontWeight: '700' },
   donationHomeCard: { borderRadius: 20, padding: 16, marginTop: 16, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(201,168,76,0.25)', ...SHADOWS.md },
   donationHomeLabel: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
   donationHomeAmount: { color: COLORS.primary, fontSize: 32, fontWeight: '800', marginTop: 4 },

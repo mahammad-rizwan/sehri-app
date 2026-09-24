@@ -118,7 +118,7 @@ export default function FeedbackScreen() {
           <TouchableOpacity onPress={resetForm} style={{ marginTop: 14 }} activeOpacity={0.7}>
             <Text style={styles.linkTxt}>Write another</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 16 }} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => router.push('/(app)/profile')} style={{ marginTop: 16 }} activeOpacity={0.7}>
             <Text style={styles.linkMuted}>Back to Profile</Text>
           </TouchableOpacity>
         </View>
@@ -131,7 +131,7 @@ export default function FeedbackScreen() {
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top, height: insets.top + (Platform.OS === 'ios' ? 44 : 56) }]}>
         <View style={styles.topBarContent}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => router.push('/(app)/profile')} style={styles.backBtn} activeOpacity={0.7}>
             <Ionicons name="arrow-back" size={18} color={COLORS.primary} />
             <Text style={styles.backBtnText}>Profile</Text>
           </TouchableOpacity>

@@ -27,6 +27,7 @@ const chatRoutes = require('./routes/chat');
 const prayerRoutes = require('./routes/prayers');
 const syncRoutes = require('./routes/sync');
 const broadcastRoutes = require('./routes/broadcast');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -71,6 +72,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/prayers', prayerRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ─────────────── 404 Handler ───────────────
 app.use((req, res) => {
@@ -97,7 +99,14 @@ function scheduleReminders() {
   ];
 
   for (const t of times) {
-    cron.schedule(t.cron, () => {
+    cron.schedule(t.cron, async () => {
+      // Outside Ramadan there is no poll to remind anyone about, so these stay
+      // silent rather than pestering everyone all year.
+      const { AppSetting } = require('./models');
+      if (!(await AppSetting.isRamadanActive())) {
+        logger.info(`Skipping ${t.label} poll reminder — Ramadan mode is off`);
+        return;
+      }
       const body = t.label === '9:50 AM'
         ? '⏰ Poll closes at 10 AM! Please cast your vote for Sehri now.'
         : '🗳️ Don\'t forget to cast your vote for Sehri!';

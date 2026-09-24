@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,19 +17,28 @@ import { EditProfileRequestModal, ChangePasswordModal } from '../../components/p
 import SignInPrompt from '../../components/ui/SignInPrompt';
 
 export default function ProfileScreen() {
-  const { user, logout, isGuest } = useAuthStore();
+  const { user, logout, isGuest, ramadanActive } = useAuthStore();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [showEdit, setShowEdit] = useState(false);
   const [showPassword, setShowPasswordModal] = useState(false);
-  const [zoneAdmin, setZoneAdmin] = useState<{ name: string; phone: string } | null>(null);
+  const [zoneAdmins, setZoneAdmins] = useState<{ id?: string; name: string; phone: string }[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
         const res = await api.get(ENDPOINTS.ZONE_ADMIN);
-        setZoneAdmin(res.data.data);
-      } catch {}
+        const d = res.data.data;
+        // `admins` is the current shape; fall back to the older single-admin
+        // response so a stale backend still shows something.
+        setZoneAdmins(
+          Array.isArray(d?.admins) && d.admins.length
+            ? d.admins
+            : (d?.name ? [{ name: d.name, phone: d.phone }] : []),
+        );
+      } catch {
+        // No admin assigned yet, or offline — the card just stays hidden.
+      }
     })();
   }, []);
 
@@ -97,21 +106,35 @@ export default function ProfileScreen() {
           ))}
         </PremiumCard>
 
-        {/* Zone Admin Contact */}
-        {zoneAdmin && (
+        {/* Zone admins — the one place contact details are shown, straight
+            from the database rather than a hardcoded list */}
+        {zoneAdmins.length > 0 && (
           <PremiumCard style={styles.card}>
-            <Text style={styles.cardTitle}>📞 Your Zone Admin</Text>
-            <View style={styles.adminRow}>
-              <View style={styles.adminAvatar}>
-                <Text style={styles.adminAvatarText}>{zoneAdmin.name.charAt(0).toUpperCase()}</Text>
-              </View>
-              <View style={styles.adminInfo}>
-                <Text style={styles.adminName}>{zoneAdmin.name}</Text>
-                <Text style={styles.adminPhone}>{zoneAdmin.phone}</Text>
-              </View>
-            </View>
+            <Text style={styles.cardTitle}>
+              📞 {zoneAdmins.length > 1 ? 'Your Zone Admins' : 'Your Zone Admin'}
+              {zoneInfo ? ` · ${zoneInfo.label}` : ''}
+            </Text>
+
+            {zoneAdmins.map((a, i) => (
+              <TouchableOpacity
+                key={a.id || a.phone || i}
+                style={styles.adminRow}
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(`tel:${a.phone}`).catch(() => {})}
+              >
+                <View style={styles.adminAvatar}>
+                  <Text style={styles.adminAvatarText}>{a.name?.charAt(0)?.toUpperCase()}</Text>
+                </View>
+                <View style={styles.adminInfo}>
+                  <Text style={styles.adminName}>{a.name}</Text>
+                  <Text style={styles.adminPhone}>{a.phone}</Text>
+                </View>
+                <Ionicons name="call-outline" size={17} color={COLORS.primary} />
+              </TouchableOpacity>
+            ))}
+
             <Text style={styles.adminNote}>
-              Contact your zone admin for any profile-related changes or assistance.
+              Tap to call about anything profile-related or if you need help.
             </Text>
           </PremiumCard>
         )}
@@ -138,19 +161,21 @@ export default function ProfileScreen() {
           />
         )}
 
-        {/* Poll History */}
-        <PremiumCard style={styles.card}>
-          <TouchableOpacity onPress={() => router.push('/(app)/poll-history')} style={styles.pollHistoryRow} activeOpacity={0.7}>
-            <View style={styles.pollHistoryIcon}>
-              <Text style={{ fontSize: 22 }}>📅</Text>
-            </View>
-            <View style={styles.pollHistoryInfo}>
-              <Text style={styles.cardTitle}>Poll History</Text>
-              <Text style={styles.pollHistorySub}>View your past Sehri responses</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
-          </TouchableOpacity>
-        </PremiumCard>
+        {/* Poll History — Sehri only, so it goes away outside Ramadan */}
+        {ramadanActive && (
+          <PremiumCard style={styles.card}>
+            <TouchableOpacity onPress={() => router.push('/(app)/poll-history')} style={styles.pollHistoryRow} activeOpacity={0.7}>
+              <View style={styles.pollHistoryIcon}>
+                <Text style={{ fontSize: 22 }}>📅</Text>
+              </View>
+              <View style={styles.pollHistoryInfo}>
+                <Text style={styles.cardTitle}>Poll History</Text>
+                <Text style={styles.pollHistorySub}>View your past Sehri responses</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+          </PremiumCard>
+        )}
 
         {/* Islamic Quote */}
         <LinearGradient

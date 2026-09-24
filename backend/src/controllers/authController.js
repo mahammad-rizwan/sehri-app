@@ -7,7 +7,6 @@ const { success, error } = require('../utils/response');
 const { notifyReviewers } = require('../services/expoPushService');
 const logger = require('../utils/logger');
 
-const DISTRIBUTOR_PHONE = process.env.DISTRIBUTOR_PHONE || '9483384972';
 
 /**
  * POST /auth/send-otp
@@ -101,11 +100,10 @@ const register = async (req, res) => {
       userId: user.id,
       name: user.name,
       phone: user.phone,
-      distributorContact: DISTRIBUTOR_PHONE,
       // OTP was just verified above — let them correct their details without
       // burning another SMS.
       editToken: generatePendingEditToken(user.id),
-    }, 'Registration successful! Contact the Sehri distributor at ' + DISTRIBUTOR_PHONE + ' for approval.', 201);
+    }, 'Registration successful! Your zone admin will review it and get back to you.', 201);
   } catch (err) {
     logger.error('register error:', err);
     if (err.name === 'SequelizeUniqueConstraintError') {
@@ -172,7 +170,7 @@ const login = async (req, res) => {
         // Fresh registration awaiting approval. The password check above already
         // proved who this is, so they can correct their details without
         // verifying by SMS a second time.
-        return error(res, 'Your account is pending approval. Please contact your zone admin for approval.', 403, {
+        return error(res, 'Your account is pending approval. Your zone admin will review it and get back to you.', 403, {
           status: 'pending', reason: 'registration', phone: user.phone, zone: user.zone, name: user.name,
           address: user.address, gender: user.gender, occupation: user.occupation, area: user.area,
           editToken: generatePendingEditToken(user.id),
@@ -508,7 +506,6 @@ const updatePendingRegistration = async (req, res) => {
       name: user.name,
       phone: user.phone,
       resubmitted: wasRejected,
-      distributorContact: DISTRIBUTOR_PHONE,
       // Refreshed so a slow edit session does not expire mid-flow.
       editToken: generatePendingEditToken(user.id),
     }, wasRejected
@@ -762,17 +759,24 @@ const getZoneAdmin = async (req, res) => {
     const zone = req.user.zone;
     if (!zone) return error(res, 'User has no zone assigned', 400);
 
-    const admin = await Admin.findOne({
+    // A zone can have more than one admin, so return all of them rather than
+    // whichever row happened to come back first.
+    const admins = await Admin.findAll({
       where: { zone },
-      attributes: ['name', 'phone'],
+      attributes: ['id', 'name', 'phone'],
+      order: [['created_at', 'ASC']],
     });
 
-    if (!admin) return error(res, 'No admin found for your zone', 404);
-
-    return success(res, { name: admin.name, phone: admin.phone, zone });
+    return success(res, {
+      zone,
+      admins: admins.map((a) => ({ id: a.id, name: a.name, phone: a.phone })),
+      // Kept so an older app build still finds the single admin it expects.
+      name: admins[0]?.name || null,
+      phone: admins[0]?.phone || null,
+    });
   } catch (err) {
     logger.error('getZoneAdmin error:', err);
-    return error(res, 'Failed to fetch zone admin', 500);
+    return error(res, 'Failed to fetch zone admins', 500);
   }
 };
 

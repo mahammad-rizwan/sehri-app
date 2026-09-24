@@ -7,10 +7,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SIZES } from '../../src/constants/theme';
 import api from '../../src/services/api';
 import { ENDPOINTS } from '../../src/constants/api';
+import { markBroadcastsSeen } from '../../src/services/broadcastBadge';
 
 type Broadcast = {
   id: string;
@@ -21,8 +21,6 @@ type Broadcast = {
   created_at: string;
 };
 
-/** Last-seen marker lives on the device — no server state needed for a badge. */
-export const LAST_SEEN_KEY = 'broadcast_last_seen';
 
 /** A known link type gets a clearer label than a raw URL. */
 function describeLink(url: string) {
@@ -64,8 +62,9 @@ export default function BroadcastFeed() {
       const { data } = await api.get(ENDPOINTS.BROADCASTS);
       const list: Broadcast[] = data.data || [];
       setItems(list);
-      // Opening the feed counts as reading it.
-      if (list.length) await AsyncStorage.setItem(LAST_SEEN_KEY, list[0].created_at);
+      // Opening the feed counts as reading it, which is what clears the
+      // badge on the home screen.
+      if (list.length) await markBroadcastsSeen(list[0].created_at);
     } catch {
       // Leave whatever is already on screen rather than blanking it.
     } finally {

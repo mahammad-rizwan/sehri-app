@@ -104,6 +104,18 @@ async function ensureSchema() {
     logger.error(`ensureSchema: broadcast_messages step failed — ${err.message}`);
   }
 
+  // ── app_settings (Ramadan mode switch) ────────────────────────────────────
+  try {
+    const tables = await qi.showAllTables();
+    const names = tables.map((t) => (typeof t === 'string' ? t : t.tableName).toLowerCase());
+    if (!names.includes('app_settings')) {
+      await require('../models/AppSetting').sync();
+      applied.push('created table app_settings');
+    }
+  } catch (err) {
+    logger.error(`ensureSchema: app_settings step failed — ${err.message}`);
+  }
+
   if (applied.length) {
     logger.info(`🔧 Schema updated on boot: ${applied.join('; ')}`);
   } else {

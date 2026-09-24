@@ -12,6 +12,7 @@ import PremiumCard from '../../../components/ui/PremiumCard';
 import { IslamicGeometric, StarDivider } from '../../../components/ui/IslamicPattern';
 import api from '../../../services/api';
 import { ENDPOINTS } from '../../../constants/api';
+import { getUnreadBroadcastCount } from '../../../services/broadcastBadge';
 import Toast from 'react-native-toast-message';
 import ExpoGoNotice from '../../../components/ui/ExpoGoNotice';
 
@@ -24,6 +25,7 @@ export default function AdminDashboard() {
   const [tomorrowStats, setTomorrowStats] = useState<any>(null);
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
   const [editRequests, setEditRequests] = useState(0);
+  const [unreadBroadcasts, setUnreadBroadcasts] = useState(0);
   const [donationSummary, setDonationSummary] = useState<any>(null);
   const [pollActive, setPollActive] = useState<boolean | null>(null);
   const [pollToggling, setPollToggling] = useState(false);
@@ -33,9 +35,12 @@ export default function AdminDashboard() {
   const [menuVisible, setMenuVisible] = useState(false);
 
   const isSuperAdmin = activeRole === 'super_admin';
+  const ramadanActive = useAuthStore((st) => st.ramadanActive);
+  const refreshSettings = useAuthStore((st) => st.refreshSettings);
 
   const loadData = async () => {
     try {
+      // Poll stats are meaningless outside Ramadan, so skip that call entirely.
       const [usersRes, statsRes] = await Promise.all([
         api.get(ENDPOINTS.USERS, { status: 'pending', limit: 10 }),
         api.get(ENDPOINTS.ACTIVE_POLL_STATS),
@@ -48,6 +53,10 @@ export default function AdminDashboard() {
         const editRes = await api.get(ENDPOINTS.PROFILE_EDIT_REQUESTS);
         setEditRequests((editRes.data.data || []).length);
       } catch { setEditRequests(0); }
+
+      // Admins receive announcements too — a super admin's post to their zone.
+      getUnreadBroadcastCount().then(setUnreadBroadcasts).catch(() => {});
+      refreshSettings();
 
       setTomorrowStats(statsRes.data.data);
       const liveActive = statsRes.data.data?.isPollActive ?? statsRes.data.data?.poll?.is_active;
@@ -125,7 +134,7 @@ export default function AdminDashboard() {
         </View>
 
         <View style={styles.content}>
-          {tomorrowStats && (
+          {ramadanActive && tomorrowStats && (
             <PremiumCard golden style={styles.card}>
               <Text style={styles.cardTitle}>📊 Sehri Poll — {tomorrowStats.displayLabel || tomorrowStats.date || 'Today'}</Text>
               <View style={styles.pollOverview}>
@@ -221,7 +230,7 @@ export default function AdminDashboard() {
 
           <Text style={styles.sectionTitle}>{isSuperAdmin ? '⚡ Super Admin Actions' : '⚡ Zone Admin Actions'}</Text>
 
-          {isSuperAdmin && (
+          {isSuperAdmin && ramadanActive && (
             <PremiumCard style={styles.pollControlCard} gradient>
               <View style={styles.pollControlRow}>
                 <View style={styles.pollControlLeft}>
@@ -254,23 +263,30 @@ export default function AdminDashboard() {
             {isSuperAdmin ? (
               <>
                 <AdminAction icon="👥" title="Users" color={COLORS.accentOrange} badge={pendingUsers.length} onPress={() => router.push('/(app)/admin/users' as any)} />
-                <AdminAction icon="⭐" title="Special Cases" color={COLORS.accentOrange} badge={tomorrowStats?.specialCaseCount || 0} onPress={() => router.push('/(app)/admin/special-cases' as any)} />
+                {ramadanActive && (
+                  <AdminAction icon="⭐" title="Special Cases" color={COLORS.accentOrange} badge={tomorrowStats?.specialCaseCount || 0} onPress={() => router.push('/(app)/admin/special-cases' as any)} />
+                )}
                 <AdminAction icon="📝" title="Edit Requests" color={COLORS.accentOrange} badge={editRequests} onPress={() => router.push('/(app)/admin/profile-edit-requests' as any)} />
                 <AdminAction icon="💬" title="Feedback" color={COLORS.accent} onPress={() => router.push('/(app)/admin/feedback' as any)} />
-                <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
+                {ramadanActive && (
+                  <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
+                )}
                 <AdminAction icon="🛵" title="Riders" color={COLORS.accentGreen} onPress={() => router.push('/(app)/admin/tracking' as any)} />
                 <AdminAction icon="💬" title="Chat" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/chat' as any)} />
                 <AdminAction icon="👤" title="Manage Admins" color="#FF6B35" onPress={() => router.push('/(app)/admin/manage-admins' as any)} />
-                <AdminAction icon="📢" title="Broadcast" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/broadcast' as any)} />
+                <AdminAction icon="📢" title="Broadcast" color={COLORS.accentPurple} badge={unreadBroadcasts} onPress={() => router.push('/(app)/admin/broadcast' as any)} />
+                <AdminAction icon="🌙" title="Ramadan Mode" color={ramadanActive ? COLORS.accentGreen : COLORS.textMuted} onPress={() => router.push('/(app)/admin/ramadan' as any)} />
                 <AdminAction icon="🔄" title="Sync Data" color={COLORS.accent} onPress={() => router.push('/(app)/admin/sync-data' as any)} />
               </>
             ) : (
               <>
                 <AdminAction icon="👥" title="Zone Approvals" color={COLORS.accentOrange} badge={pendingUsers.length} onPress={() => router.push('/(app)/admin/users' as any)} />
                 <AdminAction icon="📝" title="Edit Requests" color={COLORS.accentOrange} badge={editRequests} onPress={() => router.push('/(app)/admin/profile-edit-requests' as any)} />
-                <AdminAction icon="📢" title="Broadcast" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/broadcast' as any)} />
+                <AdminAction icon="📢" title="Broadcast" color={COLORS.accentPurple} badge={unreadBroadcasts} onPress={() => router.push('/(app)/admin/broadcast' as any)} />
                 <AdminAction icon="💬" title="Feedback" color={COLORS.accent} onPress={() => router.push('/(app)/admin/feedback' as any)} />
-                <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
+                {ramadanActive && (
+                  <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />
+                )}
                 <AdminAction icon="💬" title="Chat" color={COLORS.accentPurple} onPress={() => router.push('/(app)/admin/chat' as any)} />
               </>
             )}

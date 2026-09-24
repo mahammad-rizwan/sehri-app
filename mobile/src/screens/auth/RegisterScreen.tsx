@@ -32,32 +32,6 @@ const STARS = Array.from({ length: 20 }, (_, i) => ({
 type Step = 'location' | 'details' | 'otp' | 'success';
 const PASSWORD_REGEX = /^(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
 
-// ── Zone contact numbers ──────────────────────────────────────────────────────
-const ZONE_CONTACTS = [
-  { key: 'masjid',      label: 'Masjid Zone',     emoji: '🕌', color: '#C9A84C', phone: '9483384972' },
-  { key: 'stanza',      label: 'Stanza Zone',     emoji: '🏡', color: '#AB47BC', phone: '9483382876' },
-  { key: 'boys_hostel', label: 'Boys Hostel Zone', emoji: '🏠', color: '#4FC3F7', phone: '9876543210' },
-  { key: 'girls',       label: 'Girls Zone',      emoji: '🌸', color: '#EC407A', phone: '9876543201' },
-];
-
-function ZoneContactsCard({ zone }: { zone: string }) {
-  const contact = ZONE_CONTACTS.find((z) => z.key === zone);
-  if (!contact) return null;
-  return (
-    <View style={s.zoneContactsCard}>
-      <Text style={s.zoneContactsTitle}>Contact Your Zone Admin for Approval</Text>
-      <View key={contact.key} style={[s.zoneContactRow, { borderLeftColor: contact.color }]}>
-        <Text style={s.zoneContactEmoji}>{contact.emoji}</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={[s.zoneContactLabel, { color: contact.color }]}>{contact.label}</Text>
-          <Text style={s.zoneContactPhone}>{contact.phone}</Text>
-        </View>
-        <Ionicons name="call-outline" size={16} color={contact.color} />
-      </View>
-    </View>
-  );
-}
-
 // ── Reusable Dropdown component ──────────────────────────────────────────────
 function Dropdown({
   label, value, options, onSelect, placeholder,
@@ -375,7 +349,8 @@ export default function RegisterScreen() {
   const handleBack = () => {
     if (step === 'otp') return transitionToStep('details');
     if (step === 'details') return transitionToStep('location');
-    router.back();
+    // A guest arriving here came via replace(), so there is nothing to pop.
+    router.replace('/(auth)/welcome');
   };
 
   useEffect(() => {
@@ -646,18 +621,16 @@ export default function RegisterScreen() {
       <Text style={[s.stepSubtitle, { textAlign: 'center', marginBottom: 20 }]}>
         {wasResubmitted ? (
           <>
-            Your corrections have been sent back to your zone admin.{'\n'}
+            Your corrections have been sent to your zone admin.{'\n'}
             You'll be able to log in once they approve.
           </>
         ) : (
           <>
             JazakAllahu Khayran! Your registration is complete.{'\n'}
-            Contact your zone admin below for approval.
+            Your zone admin will review it and get back to you.
           </>
         )}
       </Text>
-
-      <ZoneContactsCard zone={internalZone} />
 
       {/* Edit details option */}
       <TouchableOpacity
@@ -801,12 +774,6 @@ const s = StyleSheet.create({
   // Success
   successNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: SIZES.radius.md, padding: 14, marginTop: 20, width: '100%', borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)' },
   // Zone contacts
-  zoneContactsCard: { backgroundColor: '#0A1929', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(201,168,76,0.2)', padding: 14, gap: 10 },
-  zoneContactsTitle: { color: COLORS.primary, fontSize: 13, fontWeight: '700', marginBottom: 4 },
-  zoneContactRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 10, borderLeftWidth: 3, paddingVertical: 6 },
-  zoneContactEmoji: { fontSize: 20, width: 28 },
-  zoneContactLabel: { fontSize: 12, fontWeight: '700' },
-  zoneContactPhone: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '800', marginTop: 1 },
   // Edit button
   editBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, paddingVertical: 12, borderRadius: SIZES.radius.md, borderWidth: 1.5, borderColor: 'rgba(201,168,76,0.35)', backgroundColor: 'rgba(201,168,76,0.06)' },
   editBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },

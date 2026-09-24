@@ -28,6 +28,19 @@ const logger = require('../utils/logger');
 
 const CLOUDINARY_FOLDER = 'sehri/donations';
 
+/**
+ * Reused connection pool for Cloudinary.
+ *
+ * Every upload otherwise pays a fresh DNS lookup and TLS handshake, which is a
+ * meaningful slice of the per-upload cost when the payload itself is small.
+ * Keeping sockets warm means back-to-back submissions skip that entirely.
+ */
+const cloudinaryAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 10,
+});
+
 const localUploadDir = path.join(__dirname, '../../uploads/donations');
 
 function getCloudinaryConfig() {
@@ -101,6 +114,7 @@ function uploadToCloudinary(buffer, mimetype, originalName) {
         hostname: 'api.cloudinary.com',
         path: `/v1_1/${cloudName}/image/upload`,
         method: 'POST',
+        agent: cloudinaryAgent,
         headers: {
           'Content-Type': `multipart/form-data; boundary=${boundary}`,
           'Content-Length': body.length,

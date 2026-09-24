@@ -53,6 +53,13 @@ interface AuthState {
    * for anything tied to a person or a zone.
    */
   isGuest: boolean;
+  /**
+   * Whether Ramadan is running. Everything Sehri — the poll, live tracking and
+   * poll history — is hidden outside it, on every role. Defaults to false so a
+   * failed fetch hides those features rather than showing a poll that cannot
+   * work.
+   */
+  ramadanActive: boolean;
   isLoading: boolean;
 
   initialize: () => Promise<void>;
@@ -65,6 +72,7 @@ interface AuthState {
   updatePendingRegistration: (data: PendingEditData) => Promise<any>;
   logout: () => Promise<void>;
   continueAsGuest: () => Promise<void>;
+  refreshSettings: () => Promise<void>;
   exitGuest: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   switchRole: (targetRole: 'user' | 'admin' | 'super_admin') => Promise<User>;
@@ -100,6 +108,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   pendingEditToken: null,
   isAuthenticated: false,
   isGuest: false,
+  ramadanActive: false,
   isLoading: true,
 
   initialize: async () => {
@@ -111,6 +120,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // No account, but they may have chosen to browse as a guest before.
         const guest = await SecureStore.getItemAsync('guestMode');
         set({ isGuest: guest === '1', isLoading: false });
+        // Guests still need this — it decides what the home screen shows.
+        get().refreshSettings();
         return;
       }
 
@@ -127,6 +138,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       registerForPushNotifications().catch(err => console.warn('[Push] Registration error (initialize):', err));
       // Rebuilds the Quran/Dua cache if a super admin has triggered a sync.
       reconcileContentVersions();
+      get().refreshSettings();
     } catch {
       await api.clearTokens();
       const guest = await SecureStore.getItemAsync('guestMode');
@@ -157,6 +169,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     registerForPushNotifications().catch(err => console.warn('[Push] Registration error (login):', err));
     reconcileContentVersions();
+    get().refreshSettings();
     return data.data.user;
   },
 
@@ -164,6 +177,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { data } = await api.post(ENDPOINTS.REGISTER, registerData, OTP_TIMEOUT_MS);
     if (data?.data?.editToken) set({ pendingEditToken: data.data.editToken });
     return data;
+  },
+
+  /** Reads the app-wide switches. Safe to call often; never throws. */
+  refreshSettings: async () => {
+    try {
+      const { data } = await api.get(ENDPOINTS.SETTINGS);
+      set({ ramadanActive: !!data?.data?.ramadanActive });
+    } catch {
+      // Leave the last known value rather than flipping features on a blip.
+    }
   },
 
   setPendingEditToken: (token) => set({ pendingEditToken: token }),

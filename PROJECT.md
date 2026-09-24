@@ -96,7 +96,14 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
   "Registration Resubmitted" push. Approving or reverting to pending also clears
   the remark, so a stale reason is never shown.
 - Profile edit requests (after approval) still require admin approval
-- Pending approval overlay shows zone admin contact number
+- **Admin contact details live in one place: Profile**, rendered from the
+  `admins` table. `GET /auth/zone-admin` returns *all* admins for the user's
+  zone (it previously returned whichever row came back first), each tappable to
+  call. Two hardcoded contact tables in the Login and Register screens have been
+  deleted — they went stale the moment an admin changed, and a pending applicant
+  should not be chasing anyone anyway.
+- Registration, resubmission and the pending/rejected login overlay now just
+  say *"Your zone admin will review it and get back to you."*
 
 ### 1a. Guest Mode
 
@@ -121,6 +128,32 @@ simply absent rather than replaced by a nag. The sign-in invitation lives in
 one place: the Profile tab. The choice persists across restarts via the
 `guestMode` flag in SecureStore, and is cleared on sign-in, sign-up or logout,
 so a guest is never silently dropped back into guest mode after logging out.
+
+### 1b. Ramadan Mode
+
+A single switch, at **Dashboard → 🌙 Ramadan Mode** (super admin only), decides
+whether the Sehri half of the app exists. Both directions ask for confirmation
+and push a notification to everyone explaining what changed.
+
+| Hidden when Ramadan is off | Stays available all year |
+|---|---|
+| Sehri poll & voting | Prayer timings |
+| Live delivery tracking | Al-Quran |
+| Poll history (user, admin, super admin) | Duas |
+| Sehri dashboard stats | Donations |
+| Poll open/close control | Announcements |
+| Special cases & allotment | Feedback, Chat |
+| Nightly poll reminders (10 PM / 5 AM / 9:50 AM) | |
+
+The flag lives in `app_settings` and is read into the auth store, so every
+screen gates off one value. It is re-read on focus, meaning a mode change
+propagates without anyone restarting the app.
+
+**Nothing is deleted.** Ending Ramadan only hides features — past polls, votes
+and donation records are kept and reappear when it is started again. The
+default is *off*, so a failed fetch hides Sehri features rather than showing a
+poll that cannot work, and the scheduled reminders check the flag before
+sending rather than pestering people all year.
 
 ### 2. Daily Sehri Poll *(Core Feature)*
 - One poll per calendar day
@@ -172,6 +205,14 @@ Presented as three numbered steps, in the order the donor actually works through
 - Donation lands as `pending`; super admin reviews the proof and marks it `paid` (setting
   the confirmed amount) or `rejected`
 - Optional anonymous mode — hides from history UI but stores real data for admin records
+- **Proofs are compressed on the device before upload.** A payment screenshot is
+  often 2–4MB, and ImagePicker's `quality` does not resize (and is ignored for
+  PNG, which most screenshots are). Since the image crosses the network twice —
+  phone to server, then server to Cloudinary — that was the dominant cost of
+  submitting. `expo-image-manipulator` caps it at 1400px wide and re-encodes to
+  JPEG q0.6, which is still perfectly legible for reading a UPI reference. If
+  the conversion fails it uploads the original rather than failing the
+  submission.
 - Proof images go to Cloudinary when credentials are set, local disk otherwise, and are
   only ever served back through the authenticated `/donations/:id/proof` route
 - **Guests can donate** without an account. They supply their own name and a
@@ -264,6 +305,18 @@ is a plain "📢 Announcement". A reader should not learn which bucket they fell
 into, or that buckets exist. Staff *do* get the zone list, since they need to
 check what went where.
 
+**Unread badge.** The Announcements quick action on Home carries a red count
+of what the user has not opened yet, and the card subtitle changes to
+"3 new updates". The admin dashboard tile carries the same badge, since admins
+also receive the super admin's announcements to their zone.
+
+The last-seen marker lives on the device (`broadcast_last_seen`), so read state
+needs no schema and no per-user table. `GET /broadcasts/unread-count?since=`
+returns just a number rather than the whole feed. Getting it wrong across two
+devices only means seeing a badge twice — never missing an announcement, which
+is the right way round for this. A failed count returns 0 rather than breaking
+the screen it sits on.
+
 **Text and links only.** There is no upload path, and `extractLinks()` drops
 anything pointing at an image/video file and anything that is not `http(s)` —
 so `javascript:` and `data:` URIs cannot get through. Google Maps and YouTube
@@ -310,7 +363,7 @@ Admins see all feedback and mark it read/unread as before.
 
 ---
 
-## All API Endpoints (84 total)
+## All API Endpoints (89 total)
 
 ### Auth `/api/auth`
 | Method | Path | Auth | Description |
@@ -417,9 +470,17 @@ Admins see all feedback and mark it read/unread as before.
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | GET | `/` | Any | Announcements for the caller's zone |
-| GET | `/channels` | admin/super_admin | Channels this sender may post to |
+| GET | `/unread-count` | Any | Number of announcements newer than `?since=` |
+| GET | `/channels` | admin/super_admin | Zones this sender may address |
 | POST | `/` | admin/super_admin | Send an announcement |
 | DELETE | `/:id` | admin (own) / super_admin | Delete an announcement |
+
+### Settings `/api/settings`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/` | Any (incl. guests) | App-wide switches — currently `ramadanActive` |
+| GET | `/ramadan` | super_admin | Status plus who last changed it |
+| PATCH | `/ramadan` | super_admin | Start or end Ramadan mode |
 
 ### Prayers `/api/prayers`
 | Method | Path | Auth | Description |

@@ -10,6 +10,7 @@ import { COLORS, SIZES, ZONE_CONFIG } from '../../../src/constants/theme';
 import api from '../../../src/services/api';
 import { ENDPOINTS } from '../../../src/constants/api';
 import { useAuthStore } from '../../../src/store/authStore';
+import { markBroadcastsSeen } from '../../../src/services/broadcastBadge';
 
 type Sent = {
   id: string; zones: string[]; body: string; links: string[];
@@ -47,7 +48,11 @@ export default function AdminBroadcast() {
       setCanPickZones(canPick);
       // A zone admin has no choice to make, so their single zone is the target.
       if (!canPick) setPickedZones(zones);
-      setSent(listRes.data.data || []);
+      const list = listRes.data.data || [];
+      setSent(list);
+      // An admin opening this screen has seen the announcements in it, so the
+      // dashboard badge should clear the same way the user feed clears it.
+      if (list.length) markBroadcastsSeen(list[0].created_at);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Could not load zones' });
     } finally {

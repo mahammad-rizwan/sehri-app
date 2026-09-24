@@ -75,6 +75,11 @@ export const ENDPOINTS = {
   PUSH_LOCATION: (id: string) => `/tracking/${id}/push-location`,
   DELETE_RIDER: (id: string) => `/tracking/${id}`,
 
+  // App-wide settings (Ramadan mode)
+  SETTINGS: '/settings',
+  RAMADAN_STATUS: '/settings/ramadan',
+  RAMADAN_SET: '/settings/ramadan',
+
   // Prayers
   PRAYER_TIMINGS: '/prayers',
   PRAYER_REFRESH: '/prayers/refresh',
@@ -89,6 +94,7 @@ export const ENDPOINTS = {
   // Broadcast announcements (read-only for users)
   BROADCASTS: '/broadcasts',
   BROADCAST_CHANNELS: '/broadcasts/channels',
+  BROADCAST_UNREAD: '/broadcasts/unread-count',
   BROADCAST_DELETE: (id: string) => `/broadcasts/${id}`,
 
   // Chat

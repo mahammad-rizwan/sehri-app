@@ -2,8 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 const {
-  getChannels, listBroadcasts, createBroadcast, deleteBroadcast,
+  getChannels, listBroadcasts, getUnreadCount, createBroadcast, deleteBroadcast,
 } = require('../controllers/broadcastController');
+
+// Cheap badge count for the home screen.
+router.get('/unread-count', authenticate, getUnreadCount);
 
 // Everyone signed in reads their own zone's feed.
 router.get('/', authenticate, listBroadcasts);

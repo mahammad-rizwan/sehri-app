@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
@@ -58,6 +59,7 @@ export default function DonationScreen() {
   const [proofUri,    setProofUri]    = useState<string | null>(null);
   const [proofName,   setProofName]   = useState<string | null>(null);
   const [loading,     setLoading]     = useState(false);
+  const [compressing, setCompressing] = useState(false);
 
   // ── Copy UPI ──────────────────────────────────────────────────────────────
   const copyUpiId = async () => {
@@ -175,10 +177,38 @@ export default function DonationScreen() {
           Toast.show({ type: 'error', text1: 'Only PNG/JPEG/JPG allowed' });
           return;
         }
-        setProofUri(picked.uri);
-        setProofName(fileName);
+
+        // Shrink before uploading. A payment screenshot is often 2–4MB, and
+        // ImagePicker's `quality` does not resize — and is ignored entirely for
+        // PNG, which most screenshots are. The image then travels twice, phone
+        // to server and server to Cloudinary, so this is the dominant cost of
+        // submitting. 1400px wide JPEG keeps a UPI reference perfectly legible
+        // while cutting the payload by an order of magnitude.
+        setCompressing(true);
+        let uploadUri = picked.uri;
+        let uploadName = fileName;
+        try {
+          const out = await ImageManipulator.manipulateAsync(
+            picked.uri,
+            picked.width && picked.width > 1400 ? [{ resize: { width: 1400 } }] : [],
+            { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG },
+          );
+          uploadUri = out.uri;
+          // Only rename once the conversion actually succeeded — otherwise the
+          // file would still be a PNG carrying a .jpg name, and the upload
+          // would declare the wrong content type.
+          uploadName = fileName.replace(/\.[^.]+$/, '.jpg');
+        } catch {
+          // Fall back to the original — a slower upload beats a failed one.
+        } finally {
+          setCompressing(false);
+        }
+
+        setProofUri(uploadUri);
+        setProofName(uploadName);
       }
     } catch {
+      setCompressing(false);
       Toast.show({ type: 'error', text1: 'Could not pick image' });
     }
   };
@@ -391,7 +421,7 @@ export default function DonationScreen() {
                   )}
                   {d.status === 'rejected' && (
                     <Text style={[st.mineHint, { color: COLORS.accentRed }]}>
-                      The proof could not be verified. Contact your zone admin if you think this is wrong.
+                      The proof could not be verified. Your zone admin's contact is in your Profile if you think this is wrong.
                     </Text>
                   )}
                 </View>
@@ -536,10 +566,25 @@ export default function DonationScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity style={st.uploadBox} onPress={pickProof} activeOpacity={0.8}>
-                <Ionicons name="cloud-upload-outline" size={36} color={COLORS.primary} />
-                <Text style={st.uploadTitle}>Tap to upload proof</Text>
-                <Text style={st.uploadSub}>PNG, JPEG, JPG only</Text>
+              <TouchableOpacity
+                style={st.uploadBox}
+                onPress={pickProof}
+                disabled={compressing}
+                activeOpacity={0.8}
+              >
+                {compressing ? (
+                  <>
+                    <ActivityIndicator color={COLORS.primary} size="large" />
+                    <Text style={st.uploadTitle}>Preparing image…</Text>
+                    <Text style={st.uploadSub}>Shrinking it so the upload is quick</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="cloud-upload-outline" size={36} color={COLORS.primary} />
+                    <Text style={st.uploadTitle}>Tap to upload proof</Text>
+                    <Text style={st.uploadSub}>PNG, JPEG, JPG only</Text>
+                  </>
+                )}
               </TouchableOpacity>
             )}
           </PremiumCard>
@@ -548,7 +593,7 @@ export default function DonationScreen() {
             title="Submit Donation"
             onPress={handleSubmit}
             loading={loading}
-            disabled={loading}
+            disabled={loading || compressing}
             size="lg"
             style={st.submitBtn}
           />

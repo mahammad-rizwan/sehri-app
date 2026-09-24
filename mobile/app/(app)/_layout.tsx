@@ -43,7 +43,7 @@ const SUPER_ADMIN_VISIBLE = new Set(SUPER_ADMIN_TAB_ORDER);
 const ROOT_SCREENS = new Set(['home', 'admin/dashboard']);
 
 // Screens whose layout header should NOT show a back button
-const NO_BACK = new Set(['home', 'admin/dashboard', 'dua/index', 'dua/category/[id]', 'dua/bookmarks', 'quran/surah/index', 'donation', 'tracking', 'profile', 'feedback']);
+const NO_BACK = new Set(['home', 'admin/dashboard', 'dua/index', 'dua/category/[id]', 'dua/bookmarks', 'quran/surah/index', 'donation', 'tracking', 'profile', 'feedback', 'broadcast']);
 
 // ─── Tab icon ─────────────────────────────────────────────────────────────────
 function TabIcon({ icon, iconActive, focused }: { icon: string; iconActive: string; focused: boolean }) {
@@ -78,6 +78,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets   = useSafeAreaInsets();
   const activeRole = useAuthStore((s) => s.activeRole) || 'user';
   const isGuest    = useAuthStore((s) => s.isGuest);
+  const ramadanActive = useAuthStore((s) => s.ramadanActive);
 
   // Keyboard visibility — lift bar for gesture-navigation phones
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -103,13 +104,20 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   // Hide bar entirely when keyboard is up on Android
   if (keyboardVisible && Platform.OS === 'android') return null;
 
-  const tabOrder = isGuest
+  const baseOrder = isGuest
     ? GUEST_TAB_ORDER
     : activeRole === 'user'
       ? USER_TAB_ORDER
       : activeRole === 'super_admin'
         ? SUPER_ADMIN_TAB_ORDER
         : ADMIN_TAB_ORDER;
+
+  // Sehri-only tabs disappear outside Ramadan. Live tracking exists to follow a
+  // Sehri delivery, and the polls tab has nothing to show.
+  const RAMADAN_ONLY_TABS = new Set(['tracking', 'admin/poll-history']);
+  const tabOrder = ramadanActive
+    ? baseOrder
+    : baseOrder.filter((t) => !RAMADAN_ONLY_TABS.has(t));
 
   function isTabActive(name: string) {
     if (state.routes[state.index]?.name === name) return true;
@@ -165,13 +173,26 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 // ─── Header back button ───────────────────────────────────────────────────────
+/**
+ * Screens that are only ever opened from the Profile tab. Sending them back to
+ * Home would drop the user somewhere they never came from.
+ */
+const FROM_PROFILE = new Set(['feedback', 'poll-history']);
+
 function BackBtn({ target, name }: { target: string; name: string }) {
   const router = useRouter();
   
   // Special case: individual chat screens go back to chat list and show "Back"
   const isIndividualChat = name.startsWith('admin/chat/') && name !== 'admin/chat/index' && name !== 'admin/chat/create';
-  const label = isIndividualChat ? 'Back' : (target.includes('admin') ? 'Dashboard' : 'Home');
-  const destination = isIndividualChat ? '/(app)/admin/chat' : target;
+  const fromProfile = FROM_PROFILE.has(name);
+
+  const label = isIndividualChat ? 'Back'
+    : fromProfile ? 'Profile'
+    : (target.includes('admin') ? 'Dashboard' : 'Home');
+
+  const destination = isIndividualChat ? '/(app)/admin/chat'
+    : fromProfile ? '/(app)/profile'
+    : target;
   
   return (
     <TouchableOpacity onPress={() => router.push(destination as any)} style={styles.backBtn} activeOpacity={0.7}>
@@ -229,16 +250,31 @@ export default function AppLayout() {
     return () => sub.remove();
   }, [pathname, homeTarget]);
 
+  /**
+   * Every screen reachable inside this group has to be registered here, not
+   * just the ones in the tab bar — an unregistered route gets no header, which
+   * is why several admin pages had no way back to the dashboard.
+   */
   const routes = useMemo(() => {
     if (activeRole === 'user') {
-      return [...USER_VISIBLE, 'feedback', 'poll-history', 'rider', 'dua/category/[id]', 'dua/bookmarks'];
+      return [
+        ...USER_VISIBLE,
+        'feedback', 'poll-history', 'rider', 'broadcast',
+        'dua/category/[id]', 'dua/bookmarks',
+      ];
     }
     const visible = activeRole === 'super_admin' ? SUPER_ADMIN_VISIBLE : ADMIN_VISIBLE;
     return [
       ...visible,
       'admin/chat/[id]', 'admin/chat/create', 'admin/tracking',
       'admin/feedback', 'admin/donation-history', 'admin/special-cases',
-      'feedback', 'poll-history', 'rider',
+      // Reached from dashboard tiles rather than the tab bar. `poll-history`
+      // is a tab for zone admins but not for super admins, so it needs listing
+      // here too.
+      'admin/profile-edit-requests', 'admin/broadcast', 'admin/sync-data',
+      'admin/ramadan',
+      'admin/poll-history',
+      'feedback', 'poll-history', 'rider', 'broadcast',
     ];
   }, [activeRole]);
 
@@ -251,7 +287,7 @@ export default function AppLayout() {
         tabBarHideOnKeyboard: true,
       }}
     >
-      {routes.map((name) => (
+      {[...new Set(routes)].map((name) => (
         <Tabs.Screen
           key={name}
           name={name}

@@ -136,7 +136,7 @@ export default function LoginScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.kav}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           <Animated.View style={[s.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
-            <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => router.replace('/(auth)/welcome')} style={s.backBtn} activeOpacity={0.7}>
               <Ionicons name="arrow-back" size={20} color={COLORS.primary} />
               <Text style={s.backText}>Back</Text>
             </TouchableOpacity>
@@ -523,12 +523,7 @@ const fp = StyleSheet.create({
   successMsg: { color: COLORS.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 22 },
 });
 
-const ZONE_CONTACTS_DATA = [
-  { key: 'masjid', label: 'Masjid Zone', emoji: '🕌', color: COLORS.zonesMasjid, phone: '9483384972' },
-  { key: 'stanza', label: 'Stanza Zone', emoji: '🏡', color: COLORS.zonesStanza, phone: '9483382876' },
-  { key: 'boys_hostel', label: 'Boys Hostel Zone', emoji: '🏠', color: COLORS.zonesBoysHostel, phone: '9876543210' },
-  { key: 'girls', label: 'Girls Zone', emoji: '🌸', color: COLORS.zonesGirls, phone: '9876543201' },
-];
+
 
 function PendingApprovalOverlay({ name, zone, reason, remark, onEdit, onDismiss }: { name: string; zone: string; reason?: 'registration' | 'profile_edit' | 'rejected'; remark?: string | null; onEdit: () => void; onDismiss: () => void }) {
   const underReview = reason === 'profile_edit';
@@ -563,23 +558,22 @@ function PendingApprovalOverlay({ name, zone, reason, remark, onEdit, onDismiss 
               <View style={pa.remarkBox}>
                 <Text style={pa.remarkLabel}>ADMIN'S REMARK</Text>
                 <Text style={pa.remarkText}>
-                  {remark || 'No specific reason was given. Please contact your zone admin.'}
+                  {remark || 'No specific reason was given.'}
                 </Text>
               </View>
             )}
 
-            <View style={pa.contactsCard}>
-              <Text style={pa.contactsTitle}>📞 Contact Your Zone Admin</Text>
-              {ZONE_CONTACTS_DATA.filter((z) => z.key === zone).map((z) => (
-                <View key={z.key} style={[pa.contactRow, { borderLeftColor: z.color }]}>
-                  <Text style={pa.contactEmoji}>{z.emoji}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[pa.contactLabel, { color: z.color }]}>{z.label}</Text>
-                    <Text style={pa.contactPhone}>{z.phone}</Text>
-                  </View>
-                  <Ionicons name="call-outline" size={16} color={z.color} />
-                </View>
-              ))}
+            {/* No admin numbers here. A pending applicant should not be
+                chasing anyone, and hardcoded contacts went stale the moment an
+                admin changed. Their zone admin's details live in Profile once
+                they are approved, rendered from the database. */}
+            <View style={pa.reassureCard}>
+              <Ionicons name="time-outline" size={16} color={COLORS.primary} />
+              <Text style={pa.reassureText}>
+                {rejected
+                  ? 'Once you resubmit, your zone admin will review it and get back to you.'
+                  : 'Your zone admin will review this and get back to you.'}
+              </Text>
             </View>
 
             {!underReview && (
@@ -606,6 +600,13 @@ function PendingApprovalOverlay({ name, zone, reason, remark, onEdit, onDismiss 
 }
 
 const pa = StyleSheet.create({
+  reassureCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(201,168,76,0.10)',
+    borderWidth: 1, borderColor: 'rgba(201,168,76,0.30)',
+    borderRadius: 12, padding: 14, marginTop: 16,
+  },
+  reassureText: { color: COLORS.textSecondary, fontSize: 13, lineHeight: 19, flex: 1 },
   remarkBox: {
     backgroundColor: 'rgba(239,83,80,0.10)',
     borderWidth: 1, borderColor: 'rgba(239,83,80,0.45)',
@@ -622,12 +623,6 @@ const pa = StyleSheet.create({
   title: { color: COLORS.textPrimary, fontSize: 22, fontWeight: '800', textAlign: 'center', marginBottom: 4 },
   name: { color: COLORS.primary, fontSize: 16, fontWeight: '600', textAlign: 'center', marginBottom: 8 },
   subtitle: { color: COLORS.textSecondary, fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
-  contactsCard: { backgroundColor: '#071522', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(201,168,76,0.2)', padding: 14, gap: 10, marginBottom: 16 },
-  contactsTitle: { color: COLORS.primary, fontSize: 13, fontWeight: '700', marginBottom: 4 },
-  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 10, borderLeftWidth: 3, paddingVertical: 6 },
-  contactEmoji: { fontSize: 20, width: 28 },
-  contactLabel: { fontSize: 11, fontWeight: '700' },
-  contactPhone: { color: COLORS.textPrimary, fontSize: 16, fontWeight: '800', marginTop: 1 },
   editBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: 'rgba(201,168,76,0.35)', backgroundColor: 'rgba(201,168,76,0.06)', marginBottom: 10 },
   editBtnText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
   backBtn: { alignItems: 'center', paddingVertical: 10 },

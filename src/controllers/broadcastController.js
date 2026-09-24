@@ -108,6 +108,43 @@ const listBroadcasts = async (req, res) => {
 };
 
 /**
+ * GET /broadcasts/unread-count?since=<ISO>
+ *
+ * Just a number, so the home screen badge does not have to pull the whole feed
+ * and its message bodies. `since` is the device's last-seen marker; without it
+ * every announcement for that zone counts as unread.
+ */
+const getUnreadCount = async (req, res) => {
+  try {
+    const rows = await BroadcastMessage.findAll({
+      attributes: ['zones', 'created_at'],
+      order: [['created_at', 'DESC']],
+      limit: 200,
+    });
+
+    const zone = req.user.zone;
+    const sinceRaw = req.query.since;
+    const since = sinceRaw ? new Date(sinceRaw) : null;
+    const validSince = since && !isNaN(since.getTime()) ? since : null;
+
+    const count = rows.filter((m) => {
+      // Staff have no single zone to match against, so they see the lot.
+      const inZone = req.userRole === 'super_admin'
+        || (Array.isArray(m.zones) && m.zones.includes(zone));
+      if (!inZone) return false;
+      if (!validSince) return true;
+      return new Date(m.createdAt) > validSince;
+    }).length;
+
+    return success(res, { count });
+  } catch (err) {
+    logger.error('getUnreadCount error:', err);
+    // A badge is not worth failing a screen over.
+    return success(res, { count: 0 });
+  }
+};
+
+/**
  * POST /broadcasts  (admin | super_admin)
  * Sends an announcement and pushes it to everyone in the target zones.
  */
@@ -185,4 +222,7 @@ const deleteBroadcast = async (req, res) => {
   }
 };
 
-module.exports = { getChannels, listBroadcasts, createBroadcast, deleteBroadcast, extractLinks };
+module.exports = {
+  getChannels, listBroadcasts, getUnreadCount,
+  createBroadcast, deleteBroadcast, extractLinks,
+};
