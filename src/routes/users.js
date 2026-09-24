@@ -12,6 +12,7 @@ const {
   deleteUser,
   deleteMyAccount,
   promoteToAdmin,
+  promoteToSuperAdmin,
   getProfileEditRequests,
   reviewProfileEditRequest,
 } = require('../controllers/userController');
@@ -43,6 +44,7 @@ router.get('/', authenticate, authorize('admin', 'super_admin'), listUsers);
 router.patch('/:id/status', authenticate, authorize('admin', 'super_admin'), updateUserStatus);
 router.delete('/:id', authenticate, authorize('admin', 'super_admin'), deleteUser);
 router.post('/promote/:id', authenticate, authorize('super_admin'), promoteToAdmin);
+router.post('/promote-super/:id', authenticate, authorize('super_admin'), promoteToSuperAdmin);
 
 // Profile edit request management (Admin)
 router.get('/profile-edit-requests', authenticate, authorize('admin', 'super_admin'), getProfileEditRequests);

@@ -226,37 +226,84 @@ const deleteUser = async (req, res) => {
  * POST /users/promote/:id (Super Admin only)
  * Promote a regular user to admin (creates record in admins table)
  */
+/**
+ * POST /users/promote/:id  (super_admin)
+ * Promotes an existing, approved user to zone admin.
+ *
+ * The zone comes from the user's own account rather than being chosen — an
+ * admin administers the zone they already belong to. Their existing password
+ * hash carries over, so they keep signing in with the credentials they know.
+ */
 const promoteToAdmin = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const user = await User.findByPk(id);
+    const user = await User.findByPk(req.params.id);
     if (!user) return error(res, 'User not found', 404);
 
-    // Check if phone already exists in admins table
-    const existingAdmin = await Admin.findOne({ where: { phone: user.phone } });
-    if (existingAdmin) {
-      return error(res, 'User already has an admin account', 409);
+    if (user.status !== 'approved') {
+      return error(res, 'Only an approved user can be made an admin', 400);
+    }
+    // Previously this silently fell back to 'masjid', which could hand someone
+    // authority over a zone they have nothing to do with.
+    if (!user.zone) {
+      return error(res, 'This user has no zone, so there is nothing to administer', 400);
     }
 
-    // Create admin record with same name/phone, default zone
+    const existingAdmin = await Admin.findOne({ where: { phone: user.phone } });
+    if (existingAdmin) return error(res, 'This user is already an admin', 409);
+
     const admin = await Admin.create({
       name: user.name,
       phone: user.phone,
-      password: user.password, // use same password hash
-      zone: user.zone || 'masjid',
+      password: user.password,
+      zone: user.zone,
       created_by: req.user.id,
     });
 
+    logger.info(`${user.phone} promoted to admin of ${user.zone} by ${req.user.id}`);
+
     return success(res, {
-      id: admin.id,
-      name: admin.name,
-      phone: admin.phone,
-      zone: admin.zone,
-      role: 'admin',
-    }, 'User promoted to admin successfully');
+      id: admin.id, name: admin.name, phone: admin.phone,
+      zone: admin.zone, role: 'admin',
+    }, `${user.name} is now the admin for ${user.zone.replace(/_/g, ' ')}`);
   } catch (err) {
     logger.error('promoteToAdmin error:', err);
+    return error(res, 'Failed to promote user', 500);
+  }
+};
+
+/**
+ * POST /users/promote-super/:id  (super_admin)
+ * Promotes an existing, approved user to super admin.
+ *
+ * Super admins are not scoped to a zone, so nothing is copied across but the
+ * identity and password hash.
+ */
+const promoteToSuperAdmin = async (req, res) => {
+  try {
+    const user = await User.findByPk(req.params.id);
+    if (!user) return error(res, 'User not found', 404);
+
+    if (user.status !== 'approved') {
+      return error(res, 'Only an approved user can be made a super admin', 400);
+    }
+
+    const existing = await SuperAdmin.findOne({ where: { phone: user.phone } });
+    if (existing) return error(res, 'This user is already a super admin', 409);
+
+    const sa = await SuperAdmin.create({
+      name: user.name,
+      phone: user.phone,
+      password: user.password,
+      is_phone_verified: true,
+    });
+
+    logger.info(`${user.phone} promoted to super admin by ${req.user.id}`);
+
+    return success(res, {
+      id: sa.id, name: sa.name, phone: sa.phone, role: 'super_admin',
+    }, `${user.name} is now a super admin`);
+  } catch (err) {
+    logger.error('promoteToSuperAdmin error:', err);
     return error(res, 'Failed to promote user', 500);
   }
 };
@@ -449,6 +496,7 @@ module.exports = {
   deleteUser,
   deleteMyAccount,
   promoteToAdmin,
+  promoteToSuperAdmin,
   getProfileEditRequests,
   reviewProfileEditRequest,
 };

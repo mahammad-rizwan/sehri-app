@@ -269,6 +269,27 @@ anything pointing at an image/video file and anything that is not `http(s)` —
 so `javascript:` and `data:` URIs cannot get through. Google Maps and YouTube
 links render as labelled buttons.
 
+### 8b. Manage Admins
+
+Staff are **promoted from existing approved accounts**, not created from a phone
+number. The old create-by-phone form is gone.
+
+Layout, top to bottom:
+1. **Search bar** — same as User Management, matches name or phone
+2. **Admins & Super Admins** — everyone with access, each with a *Remove* button
+3. **Approved Users** — tap *Make Admin* or *Make Super Admin*
+
+**A zone admin's zone comes from their own account.** There is no zone picker,
+so nobody ends up administering a zone they have nothing to do with. The
+previous handler silently fell back to `'masjid'` when a user had no zone; it
+now refuses instead.
+
+Promotion is refused for a pending or rejected account, for a user with no
+zone, and for anyone who already holds that role. The user's existing password
+hash carries over, so they keep signing in with the credentials they already
+know, and removing access deletes only the staff record — their normal user
+account is untouched.
+
 ### 9. Feedback
 Lives in **Profile → Share Feedback** (moved off the Home screen), with two tabs:
 

@@ -30,6 +30,8 @@ export const ENDPOINTS = {
   USER_DELETE: (id: string) => `/users/${id}`,
   DELETE_MY_ACCOUNT: '/users/me',
   REQUEST_PROFILE_EDIT: '/users/request-profile-edit',
+  PROMOTE_TO_ADMIN: (id: string) => `/users/promote/${id}`,
+  PROMOTE_TO_SUPER_ADMIN: (id: string) => `/users/promote-super/${id}`,
   PROFILE_EDIT_REQUESTS: '/users/profile-edit-requests',
   REVIEW_PROFILE_EDIT: (id: string) => `/users/profile-edit-requests/${id}`,
   CHANGE_PASSWORD: '/users/change-password',
