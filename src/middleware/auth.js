@@ -58,4 +58,38 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { authenticate, authorize };
+/**
+ * Attaches req.user when a valid token is present, and otherwise just carries
+ * on. Used by routes that serve both signed-in users and guests — the handler
+ * decides what to do with each.
+ *
+ * A bad or expired token is treated as "no user" rather than an error, so a
+ * stale token on a device can never block a guest action.
+ */
+const optionalAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return next();
+
+  try {
+    const decoded = verifyToken(authHeader.split(' ')[1]);
+
+    let user = null;
+    if (decoded.role === 'super_admin') user = await SuperAdmin.findByPk(decoded.userId);
+    else if (decoded.role === 'admin')  user = await Admin.findByPk(decoded.userId);
+    else if (decoded.role === 'rider')  user = await Tracking.findByPk(decoded.userId);
+    else                                user = await User.findByPk(decoded.userId);
+
+    // Only treat an approved user as signed in; a pending or rejected account
+    // falls through as a guest rather than getting a 403.
+    if (user && !(decoded.role === 'user' && user.status !== 'approved')) {
+      req.user = user;
+      req.userRole = decoded.role;
+    }
+  } catch {
+    // Expired or malformed — continue as a guest.
+  }
+
+  next();
+};
+
+module.exports = { authenticate, authorize, optionalAuth };

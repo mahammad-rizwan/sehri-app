@@ -1,11 +1,32 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, LayoutChangeEvent, Platform } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { COLORS } from '../../constants/theme';
+import { isExpoGo } from '../../utils/runtime';
 import {
   ZONE_POINTS, GIRLS_POINTS, MAP_STYLE, MARKER_COLORS,
   DEFAULT_REGION, clusterForRegion, regionForAll, LatLng,
 } from '../../constants/mapData';
+
+/**
+ * Android has no non-Google map provider, so PROVIDER_DEFAULT (undefined)
+ * already renders Google Maps there — no need to force it, and no API key
+ * dependency either way.
+ *
+ * iOS is the platform that actually needs `PROVIDER_GOOGLE` requested, but
+ * only in a real build. Expo Go's iOS binary does not have the Google Maps
+ * iOS SDK compiled in (that only happens through the config plugin in a real
+ * build), so requesting it there makes react-native-maps fail to initialize
+ * and MapKit silently falls back to its hardcoded default region — Apple's
+ * old Cupertino HQ, California. That is the "map shows America" bug: it was
+ * never a data problem, every coordinate here is Bangalore.
+ *
+ * So: Google on iOS only outside Expo Go; Android always gets its one and
+ * only provider; iOS Expo Go falls back to plain Apple Maps, correctly
+ * centred on Bangalore even though it won't carry the dark styling (MapKit
+ * ignores customMapStyle regardless of provider).
+ */
+const MAP_PROVIDER = Platform.OS === 'ios' && !isExpoGo ? PROVIDER_GOOGLE : undefined;
 
 /**
  * Native Google Maps view for live delivery tracking.
@@ -63,16 +84,37 @@ export default function DeliveryMap({
     mapRef.current?.animateCamera({ center: rider }, { duration: 1200 });
   }, [rider?.latitude, rider?.longitude, followRider]);
 
+  /**
+   * Markers here use custom child views (the coloured pin with an emoji).
+   * Android renders those by snapshotting the view, and with
+   * `tracksViewChanges={false}` set from the start it snapshots before layout
+   * has happened — giving blank, invisible markers.
+   *
+   * So: leave tracking on long enough for the first capture, then switch it
+   * off, because leaving it on permanently re-renders every marker each frame
+   * and tanks the frame rate. Clustering changes the marker set on zoom, so
+   * each new set needs its own capture window.
+   */
+  const [tracksChanges, setTracksChanges] = useState(true);
+  const clusterKey = girlsClusters.length;
+
+  useEffect(() => {
+    setTracksChanges(true);
+    const t = setTimeout(() => setTracksChanges(false), 1200);
+    return () => clearTimeout(t);
+  }, [clusterKey]);
+
   const initialRegion = useMemo(() => regionForAll(rider), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View style={[st.wrap, style]} onLayout={onLayout}>
       <MapView
         ref={mapRef}
-        // Google on both platforms so the dark style and zone colours match —
-        // Apple Maps ignores customMapStyle entirely. Keys come from app.json:
-        // android.config.googleMaps.apiKey and ios.config.googleMapsApiKey.
-        provider={PROVIDER_GOOGLE}
+        // See MAP_PROVIDER above — Google everywhere except iOS Expo Go, where
+        // the SDK isn't available and Apple Maps takes over instead. Keys for
+        // the Google path come from app.json: android.config.googleMaps.apiKey
+        // and ios.config.googleMapsApiKey (both only apply to real builds).
+        provider={MAP_PROVIDER}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
         customMapStyle={MAP_STYLE}
@@ -93,7 +135,7 @@ export default function DeliveryMap({
             key={p.key}
             coordinate={{ latitude: p.latitude, longitude: p.longitude }}
             title={p.title}
-            tracksViewChanges={false}
+            tracksViewChanges={tracksChanges}
           >
             <View style={[st.pin, { backgroundColor: p.color }]}>
               <Text style={st.pinEmoji}>{p.emoji}</Text>
@@ -107,7 +149,7 @@ export default function DeliveryMap({
             coordinate={{ latitude: c.latitude, longitude: c.longitude }}
             title={c.count > 1 ? `${c.count} girls-zone drop points` : 'Girls Zone'}
             description={c.count > 1 ? 'Zoom in to separate' : undefined}
-            tracksViewChanges={false}
+            tracksViewChanges={tracksChanges}
           >
             {c.count > 1 ? (
               <View style={[st.cluster, { backgroundColor: MARKER_COLORS.girls }]}>

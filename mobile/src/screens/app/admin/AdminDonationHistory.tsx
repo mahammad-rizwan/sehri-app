@@ -19,7 +19,8 @@ interface Donation {
   id:           string;
   donor_name:   string;
   donor_phone:  string;
-  donor_zone:   string;
+  donor_zone:   string | null;
+  is_guest?:    boolean;
   is_anonymous: boolean;
   amount:       string | null;   // decimal comes as string from backend
   status:       'pending' | 'paid' | 'rejected';
@@ -230,8 +231,8 @@ export default function AdminDonationHistory() {
     }
   };
 
-  const zl = (z: string) => (ZONE_CONFIG as any)[z]?.label || z;
-  const ze = (z: string) => (ZONE_CONFIG as any)[z]?.emoji || '📍';
+  const zl = (z: string | null) => (z ? (ZONE_CONFIG as any)[z]?.label || z : 'Guest — no zone');
+  const ze = (z: string | null) => (z ? (ZONE_CONFIG as any)[z]?.emoji || '📍' : '👤');
 
   if (loading) {
     return (
@@ -276,16 +277,16 @@ export default function AdminDonationHistory() {
           {/* Zone filter */}
           <Text style={st.sectionTitle}>Filter by Zone</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.filterRow}>
-            {['all', 'masjid', 'boys_hostel', 'stanza', 'girls'].map((z) => (
+            {['all', 'masjid', 'boys_hostel', 'stanza', 'girls', 'guest'].map((z) => (
               <TouchableOpacity
                 key={z}
                 style={[st.chip, zone === z && st.chipActive]}
                 onPress={() => setZone(z)}
                 activeOpacity={0.7}
               >
-                {z !== 'all' && <Text style={st.chipEmoji}>{ze(z)}</Text>}
+                {z !== 'all' && <Text style={st.chipEmoji}>{z === 'guest' ? '👤' : ze(z)}</Text>}
                 <Text style={[st.chipText, zone === z && st.chipTextActive]}>
-                  {z === 'all' ? 'All Zones' : zl(z)}
+                  {z === 'all' ? 'All Zones' : z === 'guest' ? 'Guests' : zl(z)}
                 </Text>
               </TouchableOpacity>
             ))}

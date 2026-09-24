@@ -98,6 +98,30 @@ One phone number can hold multiple roles simultaneously. Role switching is insta
 - Profile edit requests (after approval) still require admin approval
 - Pending approval overlay shows zone admin contact number
 
+### 1a. Guest Mode
+
+**Continue as Guest** on the Welcome screen opens the app with no account, no
+OTP and no backend call. Guests get the content that needs no identity:
+
+| Available to guests | Requires sign-in |
+|---|---|
+| 📖 Al-Quran (all 114 surahs, bookmarks, reader settings) | Sehri poll & special cases |
+| 🤲 Duas (categories, bookmarks) | Live delivery tracking |
+| 🕌 Prayer timings on Home | Donations & donation history |
+| | Feedback, chat, profile |
+
+No backend changes were needed — `GET /prayers` is already public, and the
+Quran and Dua screens fetch straight from `api.quran.com` and `ummahapi.com`.
+Guests carry no token, and `loadData()` on Home is skipped for them so the
+authenticated calls never fire and 401.
+
+Guests get their own four-tab bar (Home, Duas, Quran, Profile). Home stays
+clean — prayer timings, then Quran and Dua shortcuts, with the poll section
+simply absent rather than replaced by a nag. The sign-in invitation lives in
+one place: the Profile tab. The choice persists across restarts via the
+`guestMode` flag in SecureStore, and is cleared on sign-in, sign-up or logout,
+so a guest is never silently dropped back into guest mode after logging out.
+
 ### 2. Daily Sehri Poll *(Core Feature)*
 - One poll per calendar day
 - Voting window: **10 PM → 10 AM IST** (voting tonight = Sehri for tomorrow)
@@ -150,6 +174,12 @@ Presented as three numbered steps, in the order the donor actually works through
 - Optional anonymous mode — hides from history UI but stores real data for admin records
 - Proof images go to Cloudinary when credentials are set, local disk otherwise, and are
   only ever served back through the authenticated `/donations/:id/proof` route
+- **Guests can donate** without an account. They supply their own name and a
+  10-digit mobile number (the only way to reach them); `user_id` and
+  `donor_zone` are stored NULL, since a guest genuinely has no account and no
+  delivery zone, and `is_guest` is set. The admin panel gets a **👤 Guests**
+  filter bucket alongside the four zones. Guests get no My Donations tab —
+  there is no account to look history up against.
 - **My Donations** tab: the user's own contributions, each tagged
   ⏳ Awaiting verification / ✅ Verified / ❌ Not accepted, with a running total of
   everything verified. (`GET /donations/history` existed but had no UI.)
@@ -205,6 +235,35 @@ Presented as three numbered steps, in the order the donor actually works through
   password is the confirmation. Riders are excluded (they authenticate against
   `tracking.rider_password`).
 
+### 8a. Broadcast Announcements
+
+One-way channels. Staff post, everyone in the target zones reads and gets a
+push. **No user can reply or send** — there is no such endpoint.
+
+| Channel | Reaches |
+|---|---|
+| 📢 All Zones | Everyone |
+| 👨 Boys Channel | Masjid + Boys Hostel + Stanza (everything except girls) |
+| 🌸 Girls Channel | Girls zone |
+| 🕌 / 🏠 / 🏡 Per-zone | That single zone |
+
+- **Super admin** — any channel, or hand-pick zones. A hand-picked set that
+  happens to match a preset collapses to that preset's name in the feed.
+- **Zone admin** — their own zone only. `resolveAudience()` in
+  `constants/channels.js` is the single enforcement point: passing a wider
+  `channelKey` is rejected with 403, and passing an explicit `zones` array is
+  clamped to their own zone rather than honoured.
+
+Audience is stored as the **resolved zone list** on each message, not a channel
+id, so a message's reach can never change retroactively. Membership needs no
+table — a user's `zone` alone decides what they see, so moving zones updates
+their channels immediately.
+
+**Text and links only.** There is no upload path, and `extractLinks()` drops
+anything pointing at an image/video file and anything that is not `http(s)` —
+so `javascript:` and `data:` URIs cannot get through. Google Maps and YouTube
+links render as labelled buttons.
+
 ### 9. Feedback
 Lives in **Profile → Share Feedback** (moved off the Home screen), with two tabs:
 
@@ -225,7 +284,7 @@ Admins see all feedback and mark it read/unread as before.
 
 ---
 
-## All API Endpoints (80 total)
+## All API Endpoints (84 total)
 
 ### Auth `/api/auth`
 | Method | Path | Auth | Description |
@@ -327,6 +386,14 @@ Admins see all feedback and mark it read/unread as before.
 | POST | `/prayers` | super_admin | Force re-fetch from AlAdhan (overwrites today) |
 | POST | `/quran` | super_admin | Bump Quran content version |
 | POST | `/dua` | super_admin | Bump Dua content version |
+
+### Broadcasts `/api/broadcasts`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/` | Any | Announcements for the caller's zone |
+| GET | `/channels` | admin/super_admin | Channels this sender may post to |
+| POST | `/` | admin/super_admin | Send an announcement |
+| DELETE | `/:id` | admin (own) / super_admin | Delete an announcement |
 
 ### Prayers `/api/prayers`
 | Method | Path | Auth | Description |
@@ -676,6 +743,37 @@ eas build --platform android --profile production
 | `CLOUDINARY_URL` | `cloudinary://key:secret@cloud` — donation proof storage |
 | `FRONTEND_URL` | CORS / Socket.IO origin in production |
 | `SUPER_ADMIN_PHONE / NAME / PASSWORD` | Super admin seed credentials — **required**, seeding now fails without them |
+
+---
+
+## Running on Multiple Devices (Expo Go)
+
+`npm start` goes through `mobile/scripts/start-dev.js`, which picks the network
+interface to advertise in the QR code rather than letting Expo guess.
+
+This matters on the dev machine: VMware installs two virtual adapters at
+`192.168.128.1` and `192.168.169.1`, and Expo frequently advertises one of
+those instead of the real Wi-Fi. Phones cannot route to a virtual adapter, so
+the QR scan just hangs with no error. The launcher ranks physical adapters
+above virtual ones and pins the winner via `REACT_NATIVE_PACKAGER_HOSTNAME`.
+
+| Command | Use when |
+|---|---|
+| `npm start` | Everyone on the same Wi-Fi. Fastest. |
+| `npm run start:tunnel` | Different networks, mobile data, or Wi-Fi that blocks device-to-device traffic (common on campus). Slower but always reachable. |
+| `npm run start:plain` | Stock `expo start`, bypassing the launcher. |
+
+Any number of devices can connect at once — scan the QR in Expo Go on each,
+and press `a` / `i` for an emulator alongside them.
+
+### Maps in Expo Go
+
+Expo Go's iOS binary has no Google Maps SDK compiled in, so `PROVIDER_GOOGLE`
+cannot initialise there and MapKit falls back to its hardcoded default region
+(Apple's Cupertino HQ) — the "map shows America" symptom. `DeliveryMap` now
+requests Google only on iOS **outside** Expo Go; Android always uses its single
+available provider, and iOS Expo Go falls back to Apple Maps, correctly centred
+on Bangalore but without the dark styling. A real build gets Google on both.
 
 ---
 

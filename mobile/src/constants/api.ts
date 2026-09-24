@@ -84,6 +84,11 @@ export const ENDPOINTS = {
   SYNC_QURAN: '/sync/quran',
   SYNC_DUA: '/sync/dua',
 
+  // Broadcast announcements (read-only for users)
+  BROADCASTS: '/broadcasts',
+  BROADCAST_CHANNELS: '/broadcasts/channels',
+  BROADCAST_DELETE: (id: string) => `/broadcasts/${id}`,
+
   // Chat
   CHAT_GROUPS: '/chat/groups',
   CHAT_GROUP_DETAIL: (id: string) => `/chat/groups/${id}`,

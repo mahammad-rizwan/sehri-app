@@ -26,8 +26,10 @@ export const EXPO_GO_LIMITATIONS = [
     detail: 'Background location needs a real build. Tracking pauses when the app is backgrounded.',
   },
   {
-    feature: 'Map API key',
-    detail: "Expo Go uses its own Google Maps key, not the project's, so map behaviour may differ.",
+    feature: 'Map styling on iPhone',
+    detail:
+      "Expo Go's iOS build has no Google Maps SDK, so iPhones fall back to Apple Maps. " +
+      'Locations and markers are correct, but the dark theme is missing. Android is unaffected.',
   },
   {
     feature: 'Saving the donation QR',

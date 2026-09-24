@@ -66,6 +66,44 @@ async function ensureSchema() {
     logger.error(`ensureSchema: rejection_reason step failed — ${err.message}`);
   }
 
+  // ── donations: allow guest submissions ────────────────────────────────────
+  try {
+    const cols = await qi.describeTable('donations');
+
+    if (!cols.is_guest) {
+      await sequelize.query(
+        'ALTER TABLE donations ADD COLUMN is_guest TINYINT(1) NOT NULL DEFAULT 0',
+      );
+      applied.push('added donations.is_guest');
+    }
+    // A guest has neither an account nor a delivery zone, so these two stop
+    // being required. Existing rows are unaffected.
+    if (cols.user_id && cols.user_id.allowNull === false) {
+      await sequelize.query('ALTER TABLE donations MODIFY user_id CHAR(36) NULL');
+      applied.push('donations.user_id now nullable');
+    }
+    if (cols.donor_zone && cols.donor_zone.allowNull === false) {
+      await sequelize.query(
+        "ALTER TABLE donations MODIFY donor_zone ENUM('masjid','boys_hostel','stanza','girls') NULL",
+      );
+      applied.push('donations.donor_zone now nullable');
+    }
+  } catch (err) {
+    logger.error(`ensureSchema: donations guest step failed — ${err.message}`);
+  }
+
+  // ── broadcast_messages ────────────────────────────────────────────────────
+  try {
+    const tables = await qi.showAllTables();
+    const names = tables.map((t) => (typeof t === 'string' ? t : t.tableName).toLowerCase());
+    if (!names.includes('broadcast_messages')) {
+      await require('../models/BroadcastMessage').sync();
+      applied.push('created table broadcast_messages');
+    }
+  } catch (err) {
+    logger.error(`ensureSchema: broadcast_messages step failed — ${err.message}`);
+  }
+
   if (applied.length) {
     logger.info(`🔧 Schema updated on boot: ${applied.join('; ')}`);
   } else {

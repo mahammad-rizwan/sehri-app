@@ -47,9 +47,11 @@ export default function DonationScreen() {
   const [mine, setMine] = useState<MyDonation[]>([]);
   const [loadingMine, setLoadingMine] = useState(true);
   const [refreshingMine, setRefreshingMine] = useState(false);
-  const { user } = useAuthStore();
+  const { user, isGuest } = useAuthStore();
 
   const [donorName,   setDonorName]   = useState('');
+  // Guests have no account, so their number is the only way to reach them.
+  const [donorPhone,  setDonorPhone]  = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [amount,      setAmount]      = useState('');
   const [message,     setMessage]     = useState('');
@@ -183,6 +185,8 @@ export default function DonationScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const loadMine = useCallback(async () => {
+    // No account means no history to look up.
+    if (isGuest) { setLoadingMine(false); return; }
     try {
       const { data } = await api.get(ENDPOINTS.DONATION_HISTORY);
       setMine(data.data || []);
@@ -192,7 +196,7 @@ export default function DonationScreen() {
       setLoadingMine(false);
       setRefreshingMine(false);
     }
-  }, []);
+  }, [isGuest]);
 
   useEffect(() => { loadMine(); }, [loadMine]);
 
@@ -202,6 +206,10 @@ export default function DonationScreen() {
 
   const handleSubmit = async () => {
     console.log("amount"+amount);
+    if (isGuest && !/^[6-9]\d{9}$/.test(donorPhone.trim())) {
+      Toast.show({ type: 'error', text1: 'Enter a valid 10-digit mobile number' });
+      return;
+    }
     if (!isAnonymous && !donorName.trim()) {
       Toast.show({ type: 'error', text1: 'Enter your name or choose anonymous' });
       return;
@@ -226,6 +234,7 @@ export default function DonationScreen() {
       const formData = new FormData();
       formData.append('is_anonymous', String(isAnonymous));
       formData.append('donor_name',   isAnonymous ? '' : donorName.trim());
+      if (isGuest) formData.append('donor_phone', donorPhone.trim());
       formData.append('amount',       amount.trim());
       formData.append('message',      message.trim());
       formData.append('proof', {
@@ -242,12 +251,16 @@ export default function DonationScreen() {
         text2: 'Your donation has been submitted for verification.',
       });
 
-      // Pull it straight into My Donations so the user sees it land as pending.
-      loadMine();
-      setTab('mine');
+      // Signed-in users can watch it land as pending; guests have no history,
+      // so they just stay on the form with the toast as confirmation.
+      if (!isGuest) {
+        loadMine();
+        setTab('mine');
+      }
 
       // Reset form
       setDonorName('');
+      setDonorPhone('');
       setAmount('');
       setMessage('');
       setIsAnonymous(false);
@@ -285,27 +298,31 @@ export default function DonationScreen() {
         </View>
       </View>
 
-      {/* Give / My Donations */}
-      <View style={st.tabs}>
-        <TouchableOpacity
-          style={[st.tab, tab === 'give' && st.tabOn]}
-          onPress={() => setTab('give')}
-          activeOpacity={0.85}
-        >
-          <Text style={[st.tabTxt, tab === 'give' && st.tabTxtOn]}>🎁 Donate</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[st.tab, tab === 'mine' && st.tabOn]}
-          onPress={() => setTab('mine')}
-          activeOpacity={0.85}
-        >
-          <Text style={[st.tabTxt, tab === 'mine' && st.tabTxtOn]}>
-            📜 My Donations{mine.length ? ` (${mine.length})` : ''}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Give / My Donations — a guest has no account, so no history to show.
+          With only one tab left there is nothing to switch between, so the
+          whole strip is hidden rather than left as a single dead button. */}
+      {!isGuest && (
+        <View style={st.tabs}>
+          <TouchableOpacity
+            style={[st.tab, tab === 'give' && st.tabOn]}
+            onPress={() => setTab('give')}
+            activeOpacity={0.85}
+          >
+            <Text style={[st.tabTxt, tab === 'give' && st.tabTxtOn]}>🎁 Donate</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[st.tab, tab === 'mine' && st.tabOn]}
+            onPress={() => setTab('mine')}
+            activeOpacity={0.85}
+          >
+            <Text style={[st.tabTxt, tab === 'mine' && st.tabTxtOn]}>
+              📜 My Donations{mine.length ? ` (${mine.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {tab === 'mine' ? (
+      {tab === 'mine' && !isGuest ? (
         <ScrollView
           contentContainerStyle={st.scroll}
           refreshControl={
@@ -443,6 +460,27 @@ export default function DonationScreen() {
               onChangeText={setDonorName}
               editable={!isAnonymous}
             />
+
+            {/* A signed-in donor's number comes off their account. A guest has
+                no account, so we ask — it is the only way to contact them
+                about their donation. */}
+            {isGuest && (
+              <>
+                <Text style={st.label}>Mobile Number <Text style={st.required}>*</Text></Text>
+                <TextInput
+                  style={st.input}
+                  placeholder="10-digit mobile number"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={donorPhone}
+                  onChangeText={(t) => setDonorPhone(t.replace(/[^0-9]/g, '').slice(0, 10))}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                />
+                <Text style={st.helperText}>
+                  Used only to confirm your donation. Not shared publicly.
+                </Text>
+              </>
+            )}
 
             <TouchableOpacity
               style={[st.anonToggle, isAnonymous && st.anonToggleActive]}

@@ -10,6 +10,7 @@ const fmtDonation = (d) => ({
   donor_name:   d.donor_name,
   donor_phone:  d.donor_phone,
   donor_zone:   d.donor_zone,
+  is_guest:     Boolean(d.is_guest),
   is_anonymous: Boolean(d.is_anonymous),
   amount:       d.amount !== null && d.amount !== undefined ? String(d.amount) : null,
   status:       d.status,
@@ -19,59 +20,88 @@ const fmtDonation = (d) => ({
 });
 
 // ─── POST /donations/submit ────────────────────────────────────────────────────
+const PHONE_RE = /^[6-9]\d{9}$/;
+
+/**
+ * Accepts a donation from a signed-in user or a guest.
+ *
+ * A signed-in user's identity comes off the token. A guest supplies their own
+ * name and phone, and has no delivery zone — `donor_zone` is genuinely unknown
+ * for them rather than something to guess, so it is stored as NULL and shown
+ * as "Guest" in the admin panel.
+ */
 const submitDonation = async (req, res) => {
   try {
     if (!req.file) {
       return error(res, 'Payment proof image is required', 400);
     }
-    if (!req.user) {
-      return error(res, 'Authentication required', 401);
-    }
 
     const {
       donor_name,
+      donor_phone: guestPhone,
       is_anonymous: isAnonRaw = 'false',
       amount: amountRaw,
       message,
     } = req.body;
-    logger.info(`[submitDonation] amountRaw: "${amountRaw}" (type: ${typeof amountRaw})`);
 
+    const isGuest = !req.user;
     const is_anonymous = isAnonRaw === 'true' || isAnonRaw === true;
 
-    if (!is_anonymous && !donor_name?.trim()) {
-      return error(res, 'Donor name is required', 400);
+    let name, phone, zone, userId;
+
+    if (isGuest) {
+      // Anonymity hides the name in the UI, but we still need something to
+      // put against the record, and a phone number is the only way to reach a
+      // guest about their donation.
+      const trimmedName = (donor_name || '').trim();
+      if (!is_anonymous && !trimmedName) {
+        return error(res, 'Please enter your name, or choose to donate anonymously', 400);
+      }
+      const trimmedPhone = (guestPhone || '').trim();
+      if (!PHONE_RE.test(trimmedPhone)) {
+        return error(res, 'Please enter a valid 10-digit mobile number', 400);
+      }
+
+      name   = trimmedName || 'Guest Donor';
+      phone  = trimmedPhone;
+      zone   = null;
+      userId = null;
+    } else {
+      if (!req.user.zone) {
+        return error(res, 'User zone is required', 400);
+      }
+      name   = is_anonymous ? req.user.name : ((donor_name || '').trim() || req.user.name);
+      phone  = req.user.phone;
+      zone   = req.user.zone;
+      userId = req.user.id;
     }
 
     const declaredAmount = amountRaw ? parseFloat(amountRaw) : null;
-    logger.info(`[submitDonation] declaredAmount: ${declaredAmount}`);
     if (declaredAmount !== null && (isNaN(declaredAmount) || declaredAmount <= 0)) {
       return error(res, 'Invalid amount', 400);
-    }
-
-    if (!req.user.zone) {
-      return error(res, 'User zone is required', 400);
     }
 
     const { sequelize } = require('../database/connection');
     const donationId = require('uuid').v4();
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    // Cloudinary when configured, local disk otherwise. Returns the value to
-    // store in proof_url — an https:// URL or a /uploads/... path.
+    // Cloudinary when configured, local disk otherwise. Throws
+    // PROOF_UPLOAD_FAILED rather than silently losing the proof.
     const proofUrl = await saveDonationProof(req.file);
 
     await sequelize.query(`
       INSERT INTO donations
-        (id, user_id, donor_name, donor_phone, donor_zone, is_anonymous, amount, status, message, proof_url, created_at, updated_at)
+        (id, user_id, donor_name, donor_phone, donor_zone, is_guest, is_anonymous, amount, status, message, proof_url, created_at, updated_at)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
     `, {
       replacements: [
         donationId,
-        req.user.id,
-        is_anonymous ? req.user.name : (donor_name?.trim() || req.user.name),
-        req.user.phone,
-        req.user.zone,
+        userId,
+        name,
+        phone,
+        zone,
+        isGuest ? 1 : 0,
         is_anonymous ? 1 : 0,
         declaredAmount,
         message?.trim() || null,
@@ -81,14 +111,12 @@ const submitDonation = async (req, res) => {
       ],
     });
 
-    logger.info(`Donation submitted: ${donationId} by ${req.user.name}`);
+    logger.info(`Donation submitted: ${donationId} by ${isGuest ? `guest ${phone}` : req.user.name}`);
 
-    return success(res, { donationId }, 'Donation submitted successfully', 201);
+    return success(res, { donationId, isGuest }, 'Donation submitted successfully', 201);
   } catch (err) {
     logger.error('submitDonation error:', err);
     if (err.message === 'PROOF_UPLOAD_FAILED') {
-      // Tell the donor plainly rather than accepting a donation whose proof we
-      // could not actually store.
       return error(
         res,
         'We could not save your payment proof just now, so the donation was not recorded. Please try again in a moment.',
@@ -184,7 +212,10 @@ const getDonationSummary = async (req, res) => {
   try {
     const { sequelize } = require('../database/connection');
 
-    const zone   = ZONES.includes(req.query.zone) ? req.query.zone : null;
+    // Guests have no zone, so they are their own bucket rather than being
+    // lumped in with a real one.
+    const guestOnly = req.query.zone === 'guest';
+    const zone = guestOnly ? null : (ZONES.includes(req.query.zone) ? req.query.zone : null);
     const status = STATUSES.includes(req.query.status) ? req.query.status : null;
 
     const rawLimit = req.query.limit;
@@ -195,13 +226,14 @@ const getDonationSummary = async (req, res) => {
     // ── Filtered list ────────────────────────────────────────────────────────
     const where = [];
     const params = [];
-    if (zone)   { where.push('donor_zone = ?'); params.push(zone); }
-    if (status) { where.push('status = ?');     params.push(status); }
+    if (guestOnly) { where.push('is_guest = 1'); }
+    else if (zone) { where.push('donor_zone = ?'); params.push(zone); }
+    if (status)    { where.push('status = ?');     params.push(status); }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const [rows] = await sequelize.query(`
       SELECT
-        id, user_id, donor_name, donor_phone, donor_zone,
+        id, user_id, donor_name, donor_phone, donor_zone, is_guest,
         is_anonymous, amount, status, message, proof_url,
         DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
       FROM donations
@@ -226,7 +258,7 @@ const getDonationSummary = async (req, res) => {
     `);
 
     // ── Counts per status within the selected zone, for the filter chips ────
-    const zoneOnly = zone ? 'WHERE donor_zone = ?' : '';
+    const zoneOnly = guestOnly ? 'WHERE is_guest = 1' : (zone ? 'WHERE donor_zone = ?' : '');
     const [[counts]] = await sequelize.query(`
       SELECT
         SUM(CASE WHEN status = 'pending'  THEN 1 ELSE 0 END) AS pending,
@@ -234,7 +266,7 @@ const getDonationSummary = async (req, res) => {
         SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
         COUNT(*) AS all_count
       FROM donations ${zoneOnly}
-    `, { replacements: zone ? [zone] : [] });
+    `, { replacements: (!guestOnly && zone) ? [zone] : [] });
 
     const donations = rows.map(d => ({
       id:           d.id,
@@ -242,6 +274,7 @@ const getDonationSummary = async (req, res) => {
       donor_name:   d.donor_name,
       donor_phone:  d.donor_phone,
       donor_zone:   d.donor_zone,
+      is_guest:     Boolean(d.is_guest),
       is_anonymous: Boolean(d.is_anonymous),
       amount:       d.amount !== null ? String(d.amount) : null,
       status:       d.status,
@@ -259,7 +292,7 @@ const getDonationSummary = async (req, res) => {
         rejected: parseInt(counts.rejected || 0),
         all:      parseInt(counts.all_count || 0),
       },
-      applied: { zone: zone || 'all', status: status || 'all', limit: limit || 'all' },
+      applied: { zone: guestOnly ? 'guest' : (zone || 'all'), status: status || 'all', limit: limit || 'all' },
       total_matching: parseInt(matching.n),
       donations,
     });

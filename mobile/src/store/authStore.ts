@@ -47,6 +47,12 @@ interface AuthState {
   /** The current active mode (may differ from userRole after switching) */
   activeRole: 'user' | 'admin' | 'super_admin' | null;
   isAuthenticated: boolean;
+  /**
+   * Browsing without an account. Guests get the content that needs no
+   * identity — Quran, Duas and prayer timings — and are prompted to sign in
+   * for anything tied to a person or a zone.
+   */
+  isGuest: boolean;
   isLoading: boolean;
 
   initialize: () => Promise<void>;
@@ -58,6 +64,8 @@ interface AuthState {
   changePassword: (currentPassword: string, newPassword: string) => Promise<any>;
   updatePendingRegistration: (data: PendingEditData) => Promise<any>;
   logout: () => Promise<void>;
+  continueAsGuest: () => Promise<void>;
+  exitGuest: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   switchRole: (targetRole: 'user' | 'admin' | 'super_admin') => Promise<User>;
   forgotPasswordSendOTP: (phone: string) => Promise<any>;
@@ -91,6 +99,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   activeRole: null,
   pendingEditToken: null,
   isAuthenticated: false,
+  isGuest: false,
   isLoading: true,
 
   initialize: async () => {
@@ -99,7 +108,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const savedRole = await SecureStore.getItemAsync('userRole');
       const savedActiveRole = await SecureStore.getItemAsync('activeRole');
       if (!token) {
-        set({ isLoading: false });
+        // No account, but they may have chosen to browse as a guest before.
+        const guest = await SecureStore.getItemAsync('guestMode');
+        set({ isGuest: guest === '1', isLoading: false });
         return;
       }
 
@@ -110,6 +121,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         userRole: (savedRole as 'user' | 'admin' | 'super_admin') || data.data?.role || null,
         activeRole,
         isAuthenticated: true,
+        isGuest: false,
         isLoading: false,
       });
       registerForPushNotifications().catch(err => console.warn('[Push] Registration error (initialize):', err));
@@ -117,7 +129,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       reconcileContentVersions();
     } catch {
       await api.clearTokens();
-      set({ user: null, userRole: null, activeRole: null, isAuthenticated: false, isLoading: false });
+      const guest = await SecureStore.getItemAsync('guestMode');
+      set({
+        user: null, userRole: null, activeRole: null,
+        isAuthenticated: false, isGuest: guest === '1', isLoading: false,
+      });
     }
   },
 
@@ -131,11 +147,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await api.saveTokens(data.data.accessToken, data.data.refreshToken);
     await SecureStore.setItemAsync('userRole', role);
     await SecureStore.setItemAsync('activeRole', role);
+    await SecureStore.deleteItemAsync('guestMode');
     set({
       user: data.data.user,
       userRole: role as 'user' | 'admin' | 'super_admin',
       activeRole: role as 'user' | 'admin' | 'super_admin',
       isAuthenticated: true,
+      isGuest: false,
     });
     registerForPushNotifications().catch(err => console.warn('[Push] Registration error (login):', err));
     reconcileContentVersions();
@@ -177,11 +195,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return data;
   },
 
+  /** Browse without an account. Survives restarts until they sign in. */
+  continueAsGuest: async () => {
+    await SecureStore.setItemAsync('guestMode', '1');
+    set({ user: null, userRole: null, activeRole: null, isAuthenticated: false, isGuest: true });
+  },
+
+  /** Leave guest mode — used when a guest taps through to sign in. */
+  exitGuest: async () => {
+    await SecureStore.deleteItemAsync('guestMode');
+    set({ isGuest: false });
+  },
+
   logout: async () => {
     await api.clearTokens();
     await SecureStore.deleteItemAsync('userRole');
     await SecureStore.deleteItemAsync('activeRole');
-    set({ user: null, userRole: null, activeRole: null, pendingEditToken: null, isAuthenticated: false });
+    await SecureStore.deleteItemAsync('guestMode');
+    set({
+      user: null, userRole: null, activeRole: null,
+      pendingEditToken: null, isAuthenticated: false, isGuest: false,
+    });
   },
 
   refreshProfile: async () => {

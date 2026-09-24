@@ -99,10 +99,14 @@ export default function SplashScreen() {
     const boot = async () => {
       await useAuthStore.getState().initialize();
       if (cancelled) return;
-      const { isAuthenticated: authed, userRole } = useAuthStore.getState();
+      const { isAuthenticated: authed, userRole, isGuest } = useAuthStore.getState();
       navTimer = setTimeout(() => {
         if (cancelled) return;
-        if (authed) {
+        // A returning guest goes straight back into the readable content
+        // rather than being asked to choose again every launch.
+        if (!authed && isGuest) {
+          router.replace('/(app)/home');
+        } else if (authed) {
           if (userRole === 'super_admin' || userRole === 'admin') {
             router.replace('/(app)/admin/dashboard');
           } else {

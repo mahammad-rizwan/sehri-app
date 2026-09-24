@@ -8,6 +8,7 @@ const Donation = require('./Donation');
 const Feedback = require('./Feedback');
 const Tracking = require('./Tracking');
 const SyncState = require('./SyncState');
+const BroadcastMessage = require('./BroadcastMessage');
 const ProfileEditRequest = require('./ProfileEditRequest');
 const ChatGroup = require('./ChatGroup');
 const ChatGroupMember = require('./ChatGroupMember');
@@ -48,6 +49,7 @@ module.exports = {
   Feedback,
   Tracking,
   SyncState,
+  BroadcastMessage,
   ProfileEditRequest,
   ChatGroup,
   ChatGroupMember,

@@ -96,6 +96,31 @@ async function notifyReviewers(zone, title, body, data = {}) {
   await Promise.allSettled(tokens.map((t) => sendPushNotification(t, title, body, data)));
 }
 
+/**
+ * Notify every approved user in the given zones.
+ *
+ * Used by broadcasts. Admins and super admins are deliberately not included —
+ * they see what they sent in the feed and do not need a push for their own
+ * announcement.
+ */
+async function notifyZones(zones, title, body, data = {}) {
+  if (!Array.isArray(zones) || !zones.length) return;
+
+  const users = await User.findAll({
+    attributes: ['fcm_token'],
+    where: {
+      zone: { [Op.in]: zones },
+      status: 'approved',
+      fcm_token: { [Op.ne]: null },
+    },
+  });
+
+  const tokens = [...new Set(users.map((u) => u.fcm_token).filter(Boolean))];
+  logger.info(`Broadcast push → ${tokens.length} device(s) across ${zones.join(', ')}`);
+
+  await Promise.allSettled(tokens.map((t) => sendPushNotification(t, title, body, data)));
+}
+
 /** Notify one specific account (any role) by its stored Expo token. */
 async function notifyOne(fcmToken, title, body, data = {}) {
   if (!fcmToken) return;
@@ -104,5 +129,5 @@ async function notifyOne(fcmToken, title, body, data = {}) {
 
 module.exports = {
   sendPushNotification, sendPollEnabledNotification, sendPollDisabledNotification,
-  notifyAllUsers, notifyReviewers, notifyOne,
+  notifyAllUsers, notifyReviewers, notifyOne, notifyZones,
 };

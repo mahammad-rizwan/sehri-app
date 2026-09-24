@@ -29,6 +29,9 @@ const TAB_META: Record<string, TabDef> = {
 };
 
 const USER_TAB_ORDER       = ['home', 'donation', 'dua/index', 'quran/surah/index', 'tracking', 'profile'];
+// Guests only get what needs no identity: prayer timings (on home), Duas,
+// Quran, and a profile tab that is really a sign-in invitation.
+const GUEST_TAB_ORDER      = ['home', 'donation', 'dua/index', 'quran/surah/index', 'profile'];
 const ADMIN_TAB_ORDER      = ['admin/dashboard', 'admin/users', 'admin/chat/index', 'admin/poll-history', 'admin/profile'];
 const SUPER_ADMIN_TAB_ORDER = ['admin/dashboard', 'admin/users', 'admin/chat/index', 'admin/manage-admins', 'admin/profile'];
 
@@ -74,6 +77,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const pathname = usePathname();
   const insets   = useSafeAreaInsets();
   const activeRole = useAuthStore((s) => s.activeRole) || 'user';
+  const isGuest    = useAuthStore((s) => s.isGuest);
 
   // Keyboard visibility — lift bar for gesture-navigation phones
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -99,11 +103,13 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   // Hide bar entirely when keyboard is up on Android
   if (keyboardVisible && Platform.OS === 'android') return null;
 
-  const tabOrder = activeRole === 'user'
-    ? USER_TAB_ORDER
-    : activeRole === 'super_admin'
-      ? SUPER_ADMIN_TAB_ORDER
-      : ADMIN_TAB_ORDER;
+  const tabOrder = isGuest
+    ? GUEST_TAB_ORDER
+    : activeRole === 'user'
+      ? USER_TAB_ORDER
+      : activeRole === 'super_admin'
+        ? SUPER_ADMIN_TAB_ORDER
+        : ADMIN_TAB_ORDER;
 
   function isTabActive(name: string) {
     if (state.routes[state.index]?.name === name) return true;

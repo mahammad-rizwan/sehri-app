@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, authorize, optionalAuth } = require('../middleware/auth');
 const { error } = require('../utils/response');
 const {
   submitDonation,
@@ -27,7 +27,9 @@ const upload = multer({
   },
 });
 
-router.post('/submit', authenticate, upload.single('proof'), submitDonation);
+// Guests can donate too — optionalAuth attaches req.user when a token is
+// present and otherwise lets the request through as a guest.
+router.post('/submit', optionalAuth, upload.single('proof'), submitDonation);
 router.patch('/:id/status', authenticate, authorize('super_admin'), updateDonationStatus);
 router.get('/history', authenticate, getDonationHistory);
 router.get('/summary', authenticate, authorize('admin', 'super_admin'), getDonationSummary);

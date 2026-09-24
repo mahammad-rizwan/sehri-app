@@ -14,9 +14,10 @@ import { GoldenDivider } from '../../components/ui/IslamicPattern';
 import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
 import { EditProfileRequestModal, ChangePasswordModal } from '../../components/profile/ProfileModals';
+import SignInPrompt from '../../components/ui/SignInPrompt';
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, isGuest } = useAuthStore();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [showEdit, setShowEdit] = useState(false);
@@ -44,6 +45,19 @@ export default function ProfileScreen() {
       ]
     );
   };
+
+  if (isGuest) {
+    return (
+      <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={styles.container}>
+        <View style={{ paddingTop: insets.top }} />
+        <SignInPrompt
+          variant="full"
+          title="You're browsing as a guest"
+          message="Sign in to vote in the Sehri poll, track deliveries, donate, save bookmarks to your account and message your zone admin."
+        />
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient colors={['#050D16', '#0D1B2A', '#152336']} style={styles.container}>

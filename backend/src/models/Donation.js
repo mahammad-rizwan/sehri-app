@@ -9,7 +9,9 @@ const Donation = sequelize.define('Donation', {
   },
   user_id: {
     type: DataTypes.CHAR(36),
-    allowNull: false,
+    // Null for guest donations — someone can give without an account, and we
+    // would rather take the money than force a registration first.
+    allowNull: true,
   },
   donor_name: {
     type: DataTypes.STRING(100),
@@ -21,7 +23,16 @@ const Donation = sequelize.define('Donation', {
   },
   donor_zone: {
     type: DataTypes.ENUM('masjid', 'boys_hostel', 'stanza', 'girls'),
+    // Guests are not in a delivery zone, so this is genuinely unknown for
+    // them rather than something to guess at. Admin filters show them as
+    // "Guest".
+    allowNull: true,
+  },
+  is_guest: {
+    type: DataTypes.BOOLEAN,
     allowNull: false,
+    defaultValue: false,
+    comment: 'Submitted without an account',
   },
   is_anonymous: {
     type: DataTypes.TINYINT,

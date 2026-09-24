@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
+    "start": "node scripts/start-dev.js",
     "start:offline": "expo start --offline --clear",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -14,10 +14,11 @@
     "emulator:start": "powershell -ExecutionPolicy Bypass -File ./emulator-helper.ps1 start",
     "emulator:fix": "powershell -ExecutionPolicy Bypass -File ./emulator-helper.ps1 fix",
     "emulator:status": "powershell -ExecutionPolicy Bypass -File ./emulator-helper.ps1 status",
-    "start:tunnel": "expo start --tunnel",
-    "start:lan": "expo start --lan",
-    "start:clear": "expo start --clear",
-    "build:dev": "eas build --profile development --platform android"
+    "start:tunnel": "node scripts/start-dev.js --tunnel",
+    "start:lan": "node scripts/start-dev.js",
+    "start:clear": "node scripts/start-dev.js --clear",
+    "build:dev": "eas build --profile development --platform android",
+    "start:plain": "expo start"
   },
   "dependencies": {
     "@expo/vector-icons": "15.0.3",

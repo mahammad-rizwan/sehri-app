@@ -26,6 +26,7 @@ const trackingRoutes = require('./routes/tracking');
 const chatRoutes = require('./routes/chat');
 const prayerRoutes = require('./routes/prayers');
 const syncRoutes = require('./routes/sync');
+const broadcastRoutes = require('./routes/broadcast');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -69,6 +70,7 @@ app.use('/api/tracking', trackingRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/prayers', prayerRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/broadcasts', broadcastRoutes);
 
 // ─────────────── 404 Handler ───────────────
 app.use((req, res) => {

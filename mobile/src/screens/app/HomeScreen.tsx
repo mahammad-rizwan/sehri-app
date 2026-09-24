@@ -384,7 +384,7 @@ function TomorrowPollCard({
 }
 
 export default function HomeScreen() {
-  const { user, activeRole } = useAuthStore();
+  const { user, activeRole, isGuest } = useAuthStore();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [poll, setPoll] = useState<any>(null);
@@ -411,6 +411,9 @@ export default function HomeScreen() {
   }, []);
 
   const loadData = useCallback(async () => {
+    // Guests have no token — every call below would 401. Prayer timings are a
+    // public endpoint and load separately, so there is nothing to fetch here.
+    if (isGuest) return;
     try {
       const pollRes = await api.get(ENDPOINTS.ACTIVE_POLL);
       const d = pollRes.data.data;
@@ -440,7 +443,7 @@ export default function HomeScreen() {
         setDonationCount(donRes.data.data.total_donations || 0);
       } catch {}
     }
-  }, [activeRole]);
+  }, [activeRole, isGuest]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -536,6 +539,9 @@ export default function HomeScreen() {
         <View style={styles.content}>
           <PrayerHeroCard />
           <StarDivider />
+
+          {!isGuest && (
+          <>
           <Text style={styles.sectionTitle}>🗳️ Today's Sehri Poll</Text>
           {poll ? (
             <TomorrowPollCard
@@ -572,12 +578,25 @@ export default function HomeScreen() {
             </LinearGradient>
           )}
 
+          </>
+          )}
+
           <Text style={styles.sectionTitle}>⚡ Quick Actions</Text>
           <View style={styles.actionsGrid}>
             <ActionCard icon="📖" title="Al-Quran" subtitle="Read the Quran" color="#1A6B3C" onPress={() => router.push('/(app)/quran/surah' as any)} />
             <ActionCard icon="🤲" title="Duas" subtitle="Daily supplications" color="#8B5CF6" onPress={() => router.push('/(app)/dua' as any)} />
-            <ActionCard icon="🛵" title="Live Track" subtitle="Track your rider" color={COLORS.accent} onPress={() => router.push('/(app)/tracking')} />
+            {/* Tracking and donating both need an account, so they are not
+                offered to guests — the prompt above already explains why. */}
             <ActionCard icon="🎁" title="Donate" subtitle="Support Sehri" color={COLORS.accentGreen} onPress={() => router.push('/(app)/donation')} />
+            {/* Announcements are per-zone, so a guest has no feed to read. */}
+            {!isGuest && (
+              <ActionCard icon="📢" title="Announcements" subtitle="Updates from admins" color={COLORS.accentPurple} onPress={() => router.push('/(app)/broadcast' as any)} />
+            )}
+            {/* Tracking is tied to the donor's delivery zone, so it stays
+                behind sign-in. Donating does not. */}
+            {!isGuest && (
+              <ActionCard icon="🛵" title="Live Track" subtitle="Track your rider" color={COLORS.accent} onPress={() => router.push('/(app)/tracking')} />
+            )}
           </View>
 
           <LinearGradient colors={['rgba(26,10,46,0.8)', 'rgba(10,10,30,0.9)']} style={styles.ramzanBanner}>

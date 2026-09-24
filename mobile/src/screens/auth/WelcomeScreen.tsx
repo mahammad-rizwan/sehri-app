@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SIZES, RESPONSIVE, SHADOWS } from '../../constants/theme';
 import GoldButton from '../../components/ui/GoldButton';
+import { useAuthStore } from '../../store/authStore';
 import { CrescentMoon, IslamicGeometric, StarDivider } from '../../components/ui/IslamicPattern';
 
 const { width } = Dimensions.get('window');
@@ -85,6 +86,7 @@ function NameInfoModal({ visible, onClose }: { visible: boolean; onClose: () => 
 
 // ─── Main Welcome Screen ───────────────────────────────────────────────────────
 export default function WelcomeScreen() {
+  const { continueAsGuest } = useAuthStore();
   const router = useRouter();
   const [nameInfoVisible, setNameInfoVisible] = useState(false);
 
@@ -304,6 +306,20 @@ export default function WelcomeScreen() {
             size="lg"
             style={styles.actionBtn}
           />
+          {/* Guest entry — Quran, Duas and prayer timings need no account */}
+          <TouchableOpacity
+            onPress={async () => {
+              await continueAsGuest();
+              router.replace('/(app)/home');
+            }}
+            activeOpacity={0.75}
+            style={styles.guestLink}
+          >
+            <Ionicons name="book-outline" size={15} color={COLORS.textSecondary} />
+            <Text style={styles.guestLinkText}>Continue as Guest</Text>
+          </TouchableOpacity>
+          <Text style={styles.guestHint}>Read Quran, Duas & prayer timings — no account needed</Text>
+
           <TouchableOpacity onPress={() => setNameInfoVisible(true)} activeOpacity={0.75} style={styles.whyLink}>
             <Ionicons name="information-circle-outline" size={15} color={COLORS.primary} />
             <Text style={styles.whyLinkText}>Why "One Message"?</Text>
@@ -320,6 +336,18 @@ export default function WelcomeScreen() {
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  guestLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, marginTop: 14, paddingVertical: 8,
+  },
+  guestLinkText: {
+    color: COLORS.textSecondary, fontSize: 14,
+    fontWeight: '600', textDecorationLine: 'underline',
+  },
+  guestHint: {
+    color: COLORS.textMuted, fontSize: 11,
+    textAlign: 'center', marginTop: 2,
+  },
   container: { flex: 1 },
   geometricBg: { position: 'absolute', top: -80, alignSelf: 'center' },
   star: { position: 'absolute', backgroundColor: COLORS.primary },
