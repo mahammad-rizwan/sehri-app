@@ -12,6 +12,7 @@ const BroadcastMessage = require('./BroadcastMessage');
 const AppSetting = require('./AppSetting');
 const ZoneAddress = require('./ZoneAddress');
 const MapMarker = require('./MapMarker');
+const DeliveryAlert = require('./DeliveryAlert');
 const ProfileEditRequest = require('./ProfileEditRequest');
 const ChatGroup = require('./ChatGroup');
 const ChatGroupMember = require('./ChatGroupMember');
@@ -56,6 +57,7 @@ module.exports = {
   AppSetting,
   ZoneAddress,
   MapMarker,
+  DeliveryAlert,
   ProfileEditRequest,
   ChatGroup,
   ChatGroupMember,

@@ -3,6 +3,7 @@ const { Tracking } = require('../models');
 const { generateTokens } = require('../utils/jwt');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
+const { onRiderLocation } = require('../services/geofenceService');
 
 /**
  * GET /tracking/active
@@ -178,6 +179,12 @@ const pushLocation = async (req, res) => {
       ...(status          !== undefined && { status }),
       ...(eta_minutes     !== undefined && { eta_minutes }),
     });
+
+    // Geofencing runs fire-and-forget. The rider pushes every 5 seconds and
+    // live tracking depends on this endpoint staying fast, so a slow lookup or
+    // a failing push must never hold up — or fail — the location update.
+    onRiderLocation(rider, latitude, longitude)
+      .catch((err) => logger.error('geofence error:', err.message));
 
     return success(res, {
       id: rider.id,

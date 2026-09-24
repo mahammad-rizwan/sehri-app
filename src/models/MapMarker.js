@@ -51,6 +51,18 @@ const MapMarker = sequelize.define('MapMarker', {
     type: DataTypes.DECIMAL(10, 7),
     allowNull: false,
   },
+  /**
+   * Delivery order, 1 upwards — the sequence the rider visits stops in after
+   * leaving the distribution point. The route is the same every night, so this
+   * is set once in Zone & Map Management rather than per run.
+   *
+   * Distribution points keep 0: they are where the run starts, not a stop on it.
+   */
+  sequence: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  },
   is_active: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
