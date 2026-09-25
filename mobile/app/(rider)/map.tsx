@@ -13,7 +13,7 @@ import api from '../../src/services/api';
 import { ENDPOINTS } from '../../src/constants/api';
 import DeliveryMap from '../../src/components/map/DeliveryMap';
 
-const POLL_MS    = 20000;
+const POLL_MS    = 10000; // matches the rider's push interval
 const DEFAULT_LAT = 12.9141;
 const DEFAULT_LNG = 77.4822;
 

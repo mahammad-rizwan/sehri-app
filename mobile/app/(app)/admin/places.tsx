@@ -9,12 +9,33 @@ import Toast from 'react-native-toast-message';
 import { COLORS, SIZES } from '../../../src/constants/theme';
 import { SYMBOL_META, SYMBOL_KEYS, type MapSymbol } from '../../../src/constants/mapData';
 import MapPicker from '../../../src/components/admin/MapPicker';
-import DraggableStopList, { ROW_H } from '../../../src/components/admin/DraggableStopList';
 import {
   fetchAddresses, createAddress, updateAddress, deleteAddress,
   fetchMapMarkers, createMarker, updateMarker, deleteMarker, reorderMarkers,
-  type ZoneAddress, type MapMarkerRow,
+  fetchRoute, regenerateRoute,
+  type ZoneAddress, type MapMarkerRow, type DeliveryRoute,
 } from '../../../src/services/places';
+
+/**
+ * Loaded defensively, not imported.
+ *
+ * The draggable list needs Gesture Handler + Reanimated worklets. Where the
+ * worklets runtime is unavailable that import throws at module scope — and
+ * because Expo Router imports every route file to build its route tree, a throw
+ * here stops the entire app from opening, not just this screen. So try it, and
+ * fall back to the arrow buttons if it is not there.
+ */
+let DraggableStopList: any = null;
+let ROW_H = 60;
+try {
+  const mod = require('../../../src/components/admin/DraggableStopList');
+  DraggableStopList = mod.default;
+  ROW_H = mod.ROW_H ?? 60;
+} catch (e: any) {
+  // Print the real reason — a bare "unavailable" hides whether this is a missing
+  // Babel transform, a missing native module, or something else entirely.
+  console.warn('[Places] Drag-to-reorder unavailable — using the arrow buttons. Reason:', e?.message || e);
+}
 
 const ZONES: { key: string; label: string }[] = [
   { key: 'masjid', label: 'Masjid Zone' },
@@ -31,6 +52,8 @@ export default function PlacesManagement() {
   const [tab, setTab] = useState<Tab>('addresses');
   const [addresses, setAddresses] = useState<ZoneAddress[]>([]);
   const [markers, setMarkers] = useState<MapMarkerRow[]>([]);
+  const [route, setRoute] = useState<DeliveryRoute | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -38,9 +61,16 @@ export default function PlacesManagement() {
     try {
       // `true` pulls deactivated rows too — this screen is where they get
       // restored, so hiding them here would strand them.
-      const [a, m] = await Promise.all([fetchAddresses(undefined, true), fetchMapMarkers(true)]);
+      const [a, m, r] = await Promise.all([
+        fetchAddresses(undefined, true),
+        fetchMapMarkers(true),
+        // The path is secondary — an older server without it must not take
+        // the pins and addresses down with it.
+        fetchRoute().catch(() => null),
+      ]);
       setAddresses(a);
       setMarkers(m);
+      setRoute(r);
     } catch (err: any) {
       Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Could not load' });
     } finally {
@@ -245,13 +275,33 @@ export default function PlacesManagement() {
     }
   };
 
-  const moveStop = async (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= stops.length || savingOrder) return;
-
-    const next = [...stops];
-    [next[index], next[target]] = [next[target], next[index]];
-    await commitOrder(next);
+  /**
+   * Rebuilds the drawn path from the pins in their current order. Worth doing
+   * after any pin is moved, added, hidden or reordered — the card says when.
+   */
+  const onRegenerate = async () => {
+    try {
+      setRegenerating(true);
+      const res = await regenerateRoute();
+      const warning = res?.data?.warning;
+      if (warning) {
+        // Straight lines were saved instead of a road route. Say why plainly,
+        // because the fix (a server key) is not something this screen can do.
+        Alert.alert('Path saved with straight lines', warning);
+      } else {
+        Toast.show({ type: 'success', text1: res?.message || 'Path generated' });
+      }
+      setRoute(await fetchRoute().catch(() => null));
+    } catch (err: any) {
+      const stale = err?.response?.status === 404;
+      Toast.show({
+        type: 'error',
+        text1: stale ? 'Server needs updating' : (err?.response?.data?.message || 'Could not generate the path'),
+        text2: stale ? 'The map path needs the latest backend deployed.' : undefined,
+      });
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   /* ── Render ─────────────────────────────────────────────────────────── */
@@ -418,10 +468,12 @@ export default function PlacesManagement() {
                     <Text style={st.orderHint}>
                       {pinQuery
                         ? 'Showing matches only. Numbers are the real position on the route — clear the search to change the order.'
-                        : 'Press and hold a stop, then drag it where you want it. The arrows move one place at a time.'}
+                        : DraggableStopList
+                          ? 'Press and hold a stop, then drag it where you want it.'
+                          : 'Reordering is unavailable on this device — reload the app to try again.'}
                     </Text>
 
-                    {pinQuery ? (
+                    {pinQuery || !DraggableStopList ? (
                       /* Filtered: read-only order. Dragging or stepping a stop
                          past hidden neighbours would renumber a subset of the
                          route and there would be no way to see what moved. */
@@ -429,7 +481,7 @@ export default function PlacesManagement() {
                         const i = stops.findIndex((x) => x.id === m.id);
                         return (
                           <MarkerRow
-                            key={m.id} m={m} badge={String(i + 1)} height={ROW_H}
+                            key={m.id} m={m} badge={String(i + 1)}
                             onToggle={() => toggleMarker(m)}
                             onEdit={() => openMarker(m)}
                             onDelete={() => removeMarker(m)}
@@ -442,16 +494,13 @@ export default function PlacesManagement() {
                         onReorder={commitOrder}
                         onDragStateChange={setDragging}
                         disabled={savingOrder}
-                        renderItem={(m, i, isDragging) => (
+                        renderItem={(m: MapMarkerRow, i: number, isDragging: boolean) => (
                           <MarkerRow
                             m={m} badge={String(i + 1)} height={ROW_H} grip
                             dragging={isDragging}
                             onToggle={() => toggleMarker(m)}
                             onEdit={() => openMarker(m)}
                             onDelete={() => removeMarker(m)}
-                            onUp={i > 0 ? () => moveStop(i, -1) : undefined}
-                            onDown={i < stops.length - 1 ? () => moveStop(i, 1) : undefined}
-                            busy={savingOrder}
                           />
                         )}
                       />
@@ -459,6 +508,72 @@ export default function PlacesManagement() {
                   </View>
                 )}
               </>
+            )}
+
+            {/* Delivery path — below every pin, as the last step after ordering */}
+            {stops.length > 0 && (
+              <View style={st.pathCard}>
+                <Text style={st.section}>DELIVERY PATH</Text>
+
+                {route ? (
+                  <>
+                    <View style={st.pathRow}>
+                      <Ionicons
+                        name={route.source === 'directions' ? 'git-branch-outline' : 'remove-outline'}
+                        size={16}
+                        color={route.stale ? COLORS.accentOrange : COLORS.accentGreen}
+                      />
+                      <Text style={st.pathTitle}>
+                        {route.source === 'directions' ? 'Follows the roads' : 'Straight lines between stops'}
+                        {' · '}{route.stop_count} stops
+                        {route.distance_m ? ` · ${(route.distance_m / 1000).toFixed(1)} km` : ''}
+                        {route.duration_s ? ` · ~${Math.round(route.duration_s / 60)} min` : ''}
+                      </Text>
+                    </View>
+                    <Text style={st.pathMeta}>
+                      Generated {new Date(route.generated_at).toLocaleString('en-IN', {
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                      })}
+                      {route.generated_by ? ` by ${route.generated_by}` : ''}
+                    </Text>
+                    {route.stale && (
+                      <View style={st.staleBox}>
+                        <Ionicons name="warning-outline" size={14} color={COLORS.accentOrange} />
+                        <Text style={st.staleTxt}>
+                          Pins or their order changed since this path was made. The map is showing
+                          straight lines until you regenerate.
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <Text style={st.pathMeta}>
+                    No path yet. Until you generate one, the map joins the stops with straight
+                    dashed lines.
+                  </Text>
+                )}
+
+                <TouchableOpacity
+                  style={[st.regenBtn, (regenerating || dragging) && { opacity: 0.6 }]}
+                  onPress={onRegenerate}
+                  disabled={regenerating || dragging}
+                  activeOpacity={0.85}
+                >
+                  {regenerating ? (
+                    <ActivityIndicator color={COLORS.background} />
+                  ) : (
+                    <>
+                      <Ionicons name="refresh" size={17} color={COLORS.background} />
+                      <Text style={st.regenTxt}>{route ? 'Regenerate Map Path' : 'Generate Map Path'}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <Text style={st.pathHint}>
+                  Starts at the distribution point and visits every stop in the order above.
+                  Generate it once and every map reuses it, so riders and users never cost a
+                  Google call.
+                </Text>
+              </View>
             )}
 
             <Text style={st.footNote}>
@@ -647,7 +762,7 @@ export default function PlacesManagement() {
  * so the reorder arrows are optional — the start point has no position to move.
  */
 function MarkerRow({
-  m, badge, onToggle, onEdit, onDelete, onUp, onDown, busy,
+  m, badge, onToggle, onEdit, onDelete,
   height, grip, dragging,
 }: {
   m: MapMarkerRow;
@@ -655,9 +770,6 @@ function MarkerRow({
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onUp?: () => void;
-  onDown?: () => void;
-  busy?: boolean;
   /** Fixed height, required when the row sits in the draggable list. */
   height?: number;
   /** Shows the grab handle, hinting the row can be held and dragged. */
@@ -665,7 +777,6 @@ function MarkerRow({
   dragging?: boolean;
 }) {
   const meta = SYMBOL_META[m.symbol as MapSymbol] || SYMBOL_META.distributor;
-  const showArrows = onUp !== undefined || onDown !== undefined;
 
   return (
     <View
@@ -691,17 +802,6 @@ function MarkerRow({
           {meta.label} · {m.source === 'address' ? 'to the door' : m.symbol === 'distributor' ? 'pickup' : 'zone point'}
         </Text>
       </View>
-
-      {showArrows && (
-        <View style={st.arrows}>
-          <TouchableOpacity onPress={onUp} disabled={!onUp || busy} style={st.arrowBtn} hitSlop={6}>
-            <Ionicons name="chevron-up" size={17} color={onUp && !busy ? COLORS.primary : COLORS.border} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onDown} disabled={!onDown || busy} style={st.arrowBtn} hitSlop={6}>
-            <Ionicons name="chevron-down" size={17} color={onDown && !busy ? COLORS.primary : COLORS.border} />
-          </TouchableOpacity>
-        </View>
-      )}
 
       <TouchableOpacity style={st.iconBtn} onPress={onToggle}>
         <Ionicons
@@ -776,9 +876,28 @@ const st = StyleSheet.create({
     color: COLORS.primary, fontSize: 12, fontWeight: '800',
     minWidth: 18, textAlign: 'center',
   },
-  arrows: { justifyContent: 'center' },
-  arrowBtn: { paddingHorizontal: 2, paddingVertical: 1 },
   orderHint: { color: COLORS.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 6 },
+  pathCard: {
+    marginTop: SIZES.spacing.xl,
+    backgroundColor: COLORS.backgroundCard, borderRadius: SIZES.radius.md,
+    borderWidth: 1, borderColor: COLORS.border, padding: SIZES.spacing.md,
+  },
+  pathRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  pathTitle: { flex: 1, color: COLORS.textPrimary, fontSize: 13, fontWeight: '600' },
+  pathMeta: { color: COLORS.textMuted, fontSize: 11, marginTop: 5, lineHeight: 16 },
+  staleBox: {
+    flexDirection: 'row', gap: 7, marginTop: 9, padding: 9,
+    borderRadius: SIZES.radius.sm, backgroundColor: 'rgba(255,152,0,0.10)',
+    borderWidth: 1, borderColor: 'rgba(255,152,0,0.35)',
+  },
+  staleTxt: { flex: 1, color: COLORS.accentOrange, fontSize: 11.5, lineHeight: 16 },
+  regenBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    backgroundColor: COLORS.primary, borderRadius: SIZES.radius.md,
+    paddingVertical: 13, marginTop: SIZES.spacing.md,
+  },
+  regenTxt: { color: COLORS.background, fontSize: 14, fontWeight: '800' },
+  pathHint: { color: COLORS.textMuted, fontSize: 10.5, lineHeight: 15, marginTop: 8 },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginHorizontal: SIZES.spacing.base, marginBottom: SIZES.spacing.sm,

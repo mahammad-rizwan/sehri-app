@@ -84,3 +84,30 @@ export async function deleteMarker(id: string) {
   const { data } = await api.delete(ENDPOINTS.MAP_MARKER_ONE(id));
   return data;
 }
+
+/* ── Delivery path ───────────────────────────────────────────────────────── */
+
+export type DeliveryRoute = {
+  encoded_polyline: string;
+  /** 'directions' follows the roads; 'straight' joins stops directly. */
+  source: 'directions' | 'straight';
+  stop_count: number;
+  distance_m: number | null;
+  duration_s: number | null;
+  generated_by: string | null;
+  generated_at: string;
+  /** True once pins have moved or been reordered since the path was made. */
+  stale: boolean;
+};
+
+/** The stored path, or null if none has been generated (or the server predates it). */
+export async function fetchRoute(): Promise<DeliveryRoute | null> {
+  const { data } = await api.get(ENDPOINTS.DELIVERY_ROUTE);
+  return data?.data || null;
+}
+
+export async function regenerateRoute() {
+  // Google can take a few seconds per chunk, so allow longer than the default.
+  const { data } = await api.post(ENDPOINTS.DELIVERY_ROUTE_REGENERATE, {}, 45000);
+  return data;
+}

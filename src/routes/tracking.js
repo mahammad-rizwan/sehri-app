@@ -6,6 +6,12 @@ const {
   getActiveTracking, riderLogin, createRider,
   updateLocation, pushLocation, toggleRider, getAllRiders, deleteRider,
 } = require('../controllers/trackingController');
+const { getDropPoints, setStopDelivered } = require('../controllers/deliveryController');
+
+// Tonight's drop points + the rider's delivered checklist. Registered before
+// the `/:id/...` routes so "drop-points" is never read as a rider id.
+router.get('/drop-points', authenticate, authorize('rider', 'admin', 'super_admin'), getDropPoints);
+router.patch('/drop-points/:markerId', authenticate, authorize('rider', 'admin', 'super_admin'), setStopDelivered);
 
 // Public — rider login
 router.post('/rider-login', riderLogin);

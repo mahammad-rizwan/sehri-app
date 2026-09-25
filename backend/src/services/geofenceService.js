@@ -285,5 +285,5 @@ async function onRiderLocation(rider, latitude, longitude) {
 module.exports = {
   onRiderLocation,
   // Exported for tests.
-  distanceMeters, deliveryPollDate, recipientsForMarker, RADIUS_M, SUPPLIER_FALLBACK,
+  distanceMeters, deliveryPollDate, recipientsForMarker, sehriRecipients, RADIUS_M, SUPPLIER_FALLBACK,
 };

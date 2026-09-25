@@ -13,6 +13,8 @@ const AppSetting = require('./AppSetting');
 const ZoneAddress = require('./ZoneAddress');
 const MapMarker = require('./MapMarker');
 const DeliveryAlert = require('./DeliveryAlert');
+const DeliveryRoute = require('./DeliveryRoute');
+const DeliveryStop = require('./DeliveryStop');
 const ProfileEditRequest = require('./ProfileEditRequest');
 const ChatGroup = require('./ChatGroup');
 const ChatGroupMember = require('./ChatGroupMember');
@@ -58,6 +60,8 @@ module.exports = {
   ZoneAddress,
   MapMarker,
   DeliveryAlert,
+  DeliveryRoute,
+  DeliveryStop,
   ProfileEditRequest,
   ChatGroup,
   ChatGroupMember,

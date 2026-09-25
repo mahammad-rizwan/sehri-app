@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing, LayoutChangeEvent, Platform } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { COLORS } from '../../constants/theme';
 import { isExpoGo } from '../../utils/runtime';
 import {
   MAP_STYLE, MARKER_COLORS, SYMBOL_META,
   DEFAULT_REGION, clusterForRegion, regionForRows, LatLng,
 } from '../../constants/mapData';
-import { fetchMapMarkers, type MapMarkerRow } from '../../services/places';
+import { fetchMapMarkers, fetchRoute, type MapMarkerRow, type DeliveryRoute } from '../../services/places';
+import { decodePolyline } from '../../utils/polyline';
 
 /**
  * Android has no non-Google map provider, so PROVIDER_DEFAULT (undefined)
@@ -87,6 +88,39 @@ export default function DeliveryMap({
       .catch(() => { /* map still renders, just without pins */ });
     return () => { cancelled = true; };
   }, []);
+
+  /**
+   * The delivery path. The road-following line is generated once by a super
+   * admin and stored server-side, so drawing it costs no Google call at all.
+   */
+  const [route, setRoute] = useState<DeliveryRoute | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchRoute()
+      .then((r) => { if (!cancelled) setRoute(r); })
+      .catch(() => { /* older server or no path yet — the straight fallback draws */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  /**
+   * Which line to draw:
+   *   - the stored road line, when it still matches the pins;
+   *   - otherwise straight segments distribution point → stop 1 → stop 2 …,
+   *     built from the pins themselves, so the line always matches what is on
+   *     the map. A stale road line could still run to a stop that moved.
+   */
+  const path = useMemo(() => {
+    if (route && !route.stale && route.encoded_polyline) {
+      return { points: decodePolyline(route.encoded_polyline), road: route.source === 'directions' };
+    }
+    const start = markers.find((m) => m.symbol === 'distributor');
+    const stops = markers
+      .filter((m) => m.symbol !== 'distributor')
+      .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+    const pts = [...(start ? [start] : []), ...stops]
+      .map((m) => ({ latitude: m.latitude, longitude: m.longitude }));
+    return { points: pts, road: false };
+  }, [route, markers]);
 
   // Cluster only the dense symbol groups; a handful of pins never collide.
   const clustered = useMemo(() => {
@@ -168,6 +202,30 @@ export default function DeliveryMap({
         loadingBackgroundColor={COLORS.background}
         loadingIndicatorColor={COLORS.primary}
       >
+        {/* Delivery path, Zomato-style: a dark casing under a bright line so it
+            reads on any tile. Straight fallback is dashed to say "approximate". */}
+        {path.points.length > 1 && (
+          <>
+            <Polyline
+              coordinates={path.points}
+              strokeColor="rgba(0,0,0,0.55)"
+              strokeWidth={path.road ? 8 : 6}
+              lineCap="round"
+              lineJoin="round"
+              zIndex={1}
+            />
+            <Polyline
+              coordinates={path.points}
+              strokeColor={COLORS.primary}
+              strokeWidth={path.road ? 4.5 : 3}
+              lineCap="round"
+              lineJoin="round"
+              lineDashPattern={path.road ? undefined : [10, 8]}
+              zIndex={2}
+            />
+          </>
+        )}
+
         {clustered.map((m: any) => {
           const meta = SYMBOL_META[m.symbol as keyof typeof SYMBOL_META] || SYMBOL_META.distributor;
           const grouped = (m.count || 1) > 1;

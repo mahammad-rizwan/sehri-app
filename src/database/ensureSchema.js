@@ -208,6 +208,22 @@ async function ensureSchema() {
     logger.error(`ensureSchema: delivery_alerts step failed — ${err.message}`);
   }
 
+  // ── delivery_routes + delivery_stops (path + rider checklist) ────────────
+  try {
+    const tables = await qi.showAllTables();
+    const names = tables.map((t) => (typeof t === 'string' ? t : t.tableName).toLowerCase());
+    if (!names.includes('delivery_routes')) {
+      await require('../models/DeliveryRoute').sync();
+      applied.push('created table delivery_routes');
+    }
+    if (!names.includes('delivery_stops')) {
+      await require('../models/DeliveryStop').sync();
+      applied.push('created table delivery_stops');
+    }
+  } catch (err) {
+    logger.error(`ensureSchema: delivery_routes/stops step failed — ${err.message}`);
+  }
+
   if (applied.length) {
     logger.info(`🔧 Schema updated on boot: ${applied.join('; ')}`);
   } else {

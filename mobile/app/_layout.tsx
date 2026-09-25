@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useEffect, useRef } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -9,6 +8,20 @@ import * as Device from 'expo-device';
 import Toast from 'react-native-toast-message';
 import { COLORS } from '../src/constants/theme';
 import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener, cancelLegacyLocalReminders } from '../src/services/notificationService';
+
+/**
+ * Gesture Handler needs a root view or its gestures never fire on Android, but
+ * importing it pulls in Reanimated's worklets runtime — which is missing in some
+ * environments (Expo Go without the native worklets module). A throw here would
+ * take down the whole app, since Expo Router imports every route file to build
+ * the route tree, so fall back to a plain View and lose only the gestures.
+ */
+let GestureRoot: React.ComponentType<any> = View;
+try {
+  GestureRoot = require('react-native-gesture-handler').GestureHandlerRootView || View;
+} catch {
+  console.warn('[Gestures] Gesture Handler unavailable — drag-to-reorder disabled');
+}
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -50,9 +63,18 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  const onLayoutRootView = useCallback(async () => {
+  /**
+   * Hidden from an effect rather than the root view's `onLayout`.
+   *
+   * It used to hang off `onLayout`, which broke the moment the root became
+   * GestureHandlerRootView — that wrapper does not reliably forward the prop, so
+   * the callback never fired, the splash never hid, and the app sat on a white
+   * screen while the JS underneath carried on running. An effect does not care
+   * what component is at the root.
+   */
+  useEffect(() => {
     if (fontsLoaded || fontError) {
-      await SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, fontError]);
 
@@ -63,7 +85,7 @@ export default function RootLayout() {
   return (
     // Gesture Handler needs this at the root or none of its gestures fire on
     // Android — used by the drag-to-reorder list in Zone & Map Management.
-    <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+    <GestureRoot style={{ flex: 1 }}>
       <StatusBar style="light" backgroundColor={COLORS.background} />
       <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
         <Stack.Screen name="index" />
@@ -72,6 +94,6 @@ export default function RootLayout() {
         <Stack.Screen name="(rider)" />
       </Stack>
       <Toast />
-    </GestureHandlerRootView>
+    </GestureRoot>
   );
 }

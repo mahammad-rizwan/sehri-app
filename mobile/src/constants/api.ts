@@ -81,6 +81,10 @@ export const ENDPOINTS = {
   MAP_MARKERS: '/places/markers',
   MAP_MARKER_ONE: (id: string) => `/places/markers/${id}`,
   MAP_MARKERS_REORDER: '/places/markers/reorder',
+  DELIVERY_ROUTE: '/places/route',
+  DELIVERY_ROUTE_REGENERATE: '/places/route/regenerate',
+  DROP_POINTS: '/tracking/drop-points',
+  DROP_POINT: (markerId: string) => `/tracking/drop-points/${markerId}`,
 
   // App-wide settings (Ramadan mode)
   SETTINGS: '/settings',

@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { COLORS, SIZES, RESPONSIVE } from '../../src/constants/theme';
 import { API_BASE_URL } from '../../src/constants/api';
+import DropPointList from '../../src/components/rider/DropPointList';
 
 const LOCATION_TASK_NAME = 'sehri-rider-broadcast';
 
@@ -194,7 +195,8 @@ export default function BroadcastScreen() {
         try {
           await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
             accuracy: Location.Accuracy.High,
-            timeInterval: 20000,
+            // 10 s = 90 pushes per 15 min, well inside riderPushLimiter's 250.
+            timeInterval: 10000,
             distanceInterval: 0,
             // iOS: blue status bar pill while tracking, and telling it this is
             // vehicle navigation stops Core Location throttling the updates.
@@ -210,7 +212,7 @@ export default function BroadcastScreen() {
           });
         } catch (bgErr) {
           // Background task failed (e.g. bg permission denied) — fall back to interval
-          intervalRef.current = setInterval(() => pushGPS(riderId), 20000);
+          intervalRef.current = setInterval(() => pushGPS(riderId), 10000);
         }
       }
     } catch (err: any) {
@@ -367,6 +369,10 @@ export default function BroadcastScreen() {
           </>
         )}
 
+        {/* Tonight's stops, counts and the delivered checklist. Shown whether or
+            not broadcasting has started, so the rider can load up before leaving. */}
+        <DropPointList />
+
         {/* Info */}
         <LinearGradient
           colors={['rgba(201,168,76,0.08)', 'transparent']}
@@ -375,7 +381,7 @@ export default function BroadcastScreen() {
           <Text style={st.infoTitle}>ℹ️ How it works</Text>
           {[
             'Tap Start Broadcasting to begin sharing your location',
-            'Your GPS updates every 20 seconds — even when you switch apps',
+            'Your GPS updates every 10 seconds — even when you switch apps',
             'Users see your live pin on the tracking map',
             'Tap Stop when delivery is complete',
           ].map((t, i) => (

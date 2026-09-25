@@ -1,5 +1,6 @@
 const { ZoneAddress, MapMarker } = require('../models');
 const { Op } = require('sequelize');
+const routeService = require('../services/routeService');
 const { success, error } = require('../utils/response');
 const logger = require('../utils/logger');
 
@@ -341,8 +342,54 @@ const deleteMarker = async (req, res) => {
   }
 };
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Delivery path
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * POST /places/route/regenerate
+ *
+ * Rebuilds the drawn path from the distribution point through every stop in
+ * delivery order. This is the only place Google gets called for routing — a
+ * couple of requests per press, not per map view.
+ */
+const regenerateRoute = async (req, res) => {
+  try {
+    const out = await routeService.regenerateRoute(req.user?.name || 'Super admin');
+    return success(res, {
+      source: out.source,
+      stop_count: out.stop_count,
+      distance_m: out.distance_m,
+      duration_s: out.duration_s,
+      warning: out.warning,
+    }, out.source === 'directions'
+      ? `Road path generated through ${out.stop_count} stops`
+      : 'Path generated with straight lines');
+  } catch (err) {
+    if (err.status === 400) return error(res, err.message, 400);
+    logger.error('regenerateRoute error:', err);
+    return error(res, 'Failed to generate the path', 500);
+  }
+};
+
+/**
+ * GET /places/route
+ *
+ * Read by every map. Returns null when no path has been generated yet, in which
+ * case the app draws straight lines between the pins itself.
+ */
+const getRoute = async (req, res) => {
+  try {
+    return success(res, await routeService.currentRoute());
+  } catch (err) {
+    logger.error('getRoute error:', err);
+    return error(res, 'Failed to load the path', 500);
+  }
+};
+
 module.exports = {
   listAddresses, createAddress, updateAddress, deleteAddress,
   listMarkers, createMarker, updateMarker, deleteMarker, reorderMarkers,
+  regenerateRoute, getRoute,
   ZONES, ZONE_LABELS,
 };
