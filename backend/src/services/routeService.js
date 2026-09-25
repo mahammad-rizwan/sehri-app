@@ -28,6 +28,34 @@ const MAX_POINTS_PER_REQUEST = 25;
 
 const REQUEST_TIMEOUT_MS = 15000;
 
+/**
+ * Google's error body carries a machine-readable reason under the generic
+ * message ("The caller does not have permission" covers half a dozen different
+ * setup mistakes). Translate the common ones into the actual fix.
+ */
+const REASON_HINTS = {
+  API_KEY_ANDROID_APP_BLOCKED: 'this key is locked to the Android app. Create a separate server key for Routes API',
+  API_KEY_IOS_APP_BLOCKED: 'this key is locked to the iOS app. Create a separate server key for Routes API',
+  API_KEY_HTTP_REFERRER_BLOCKED: 'this key is locked to websites. Create a separate server key for Routes API',
+  API_KEY_IP_ADDRESS_BLOCKED: "this key's IP restriction does not include the server",
+  API_KEY_SERVICE_BLOCKED: 'this key is not allowed to call Routes API. Add Routes API to its API restrictions',
+  SERVICE_DISABLED: 'Routes API is not enabled in this Google Cloud project. Enable it under APIs & Services',
+  BILLING_DISABLED: 'billing is not enabled on this Google Cloud project',
+  API_KEY_INVALID: 'the key is not valid. Check it was copied in full',
+};
+
+function describeGoogleError(body, httpStatus) {
+  const e = body?.error || {};
+  const reason = (e.details || []).map((d) => d.reason).find(Boolean);
+  const hint = reason && REASON_HINTS[reason];
+  const base = e.message || `Routes API returned HTTP ${httpStatus}`;
+  const err = new Error(hint ? `${base} — ${hint}` : (reason ? `${base} (${reason})` : base));
+  // Permission and key problems fail the same way in every travel mode, so
+  // there is no point retrying with another one.
+  err.permanent = httpStatus === 401 || httpStatus === 403 || e.status === 'PERMISSION_DENIED';
+  return err;
+}
+
 /** Distribution point first, then every active stop in delivery order. */
 async function routePoints() {
   const markers = await MapMarker.findAll({
@@ -105,9 +133,7 @@ async function fetchChunk(points, key, travelMode) {
     });
 
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(body?.error?.message || `Routes API returned HTTP ${res.status}`);
-    }
+    if (!res.ok) throw describeGoogleError(body, res.status);
     const route = body?.routes?.[0];
     if (!route?.polyline?.encodedPolyline) {
       throw new Error('Routes API found no road route between these points');
@@ -144,7 +170,7 @@ async function roadRoute(points, key) {
       }
       return { points: merged, distance, duration, travelMode, calls: chunks.length };
     } catch (err) {
-      if (travelMode === 'DRIVE') throw err;
+      if (travelMode === 'DRIVE' || err.permanent) throw err;
       logger.warn(`Routes API ${travelMode} failed (${err.message}) — retrying with DRIVE`);
     }
   }

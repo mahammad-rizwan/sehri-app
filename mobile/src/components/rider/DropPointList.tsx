@@ -1,7 +1,5 @@
-import { useCallback, useState } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking, Platform,
-} from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
@@ -34,8 +32,11 @@ type DropPoints = {
   unrouted: { address: string; zone: string | null; count: number }[];
 };
 
-/** Re-read while the screen is open, so a second rider's ticks show up. */
+/** Re-read while the screen is open, so a second rider's progress shows up. */
 const REFRESH_MS = 30000;
+
+/** How long "Delivered" stays on screen with an Undo before moving on. */
+const UNDO_SECONDS = 7;
 
 /**
  * Plain fetch with the rider's token, the same way the rest of the rider screen
@@ -61,16 +62,33 @@ async function riderFetch(path: string, init?: RequestInit) {
   return body?.data;
 }
 
+/** Recomputes the derived counters after a stop is ticked or un-ticked locally. */
+function withDelivered(prev: DropPoints, id: string, delivered: boolean): DropPoints {
+  const stops = prev.stops.map((s) => (s.id === id ? { ...s, delivered } : s));
+  const active = stops.filter((s) => s.count > 0);
+  return {
+    ...prev,
+    stops,
+    next_stop_id: active.find((s) => !s.delivered)?.id || null,
+    delivered_stops: active.filter((s) => s.delivered).length,
+  };
+}
+
 /**
- * Tonight's drop points for the rider: every stop in delivery order with how
- * many Sehri go there, a checkbox to tick it off, and the next stop pulled out
- * at the top so the rider never has to scan the list mid-ride.
+ * Tonight's drop points for the rider, one stop at a time.
+ *
+ * The current stop sits in a card with a single action, Mark delivered. That
+ * flips the card to a green "Delivered" state with an Undo for seven seconds —
+ * long enough to catch a mis-tap on a moving scooter — and then the next stop
+ * takes its place. Below it, a read-only list of what is still to come, so the
+ * rider can see how many Sehri each later stop needs while packing.
  */
 export default function DropPointList() {
   const [data, setData] = useState<DropPoints | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [justDone, setJustDone] = useState<{ stop: Stop; left: number } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -93,43 +111,58 @@ export default function DropPointList() {
     }, [load]),
   );
 
+  // The undo countdown. When it runs out the card simply moves on — the stop
+  // was already saved as delivered the moment the button was pressed.
+  useEffect(() => {
+    if (!justDone) return;
+    if (justDone.left <= 0) {
+      setJustDone(null);
+      return;
+    }
+    const t = setTimeout(() => setJustDone((j) => (j ? { ...j, left: j.left - 1 } : j)), 1000);
+    return () => clearTimeout(t);
+  }, [justDone]);
+
   /**
-   * Ticks a stop on or off. The list updates immediately and the next stop moves
-   * on; if the server refuses, reload so the screen never shows a false tick.
+   * Saved straight away rather than after the countdown, so closing the app
+   * during those seven seconds cannot lose a delivery. Undo un-saves it.
    */
-  const toggle = async (stop: Stop) => {
-    if (busyId) return;
-    const delivered = !stop.delivered;
-    setBusyId(stop.id);
-    setData((prev) => {
-      if (!prev) return prev;
-      const stops = prev.stops.map((s) => (s.id === stop.id ? { ...s, delivered } : s));
-      const active = stops.filter((s) => s.count > 0);
-      return {
-        ...prev,
-        stops,
-        next_stop_id: active.find((s) => !s.delivered)?.id || null,
-        delivered_stops: active.filter((s) => s.delivered).length,
-      };
-    });
+  const markDelivered = async (stop: Stop) => {
+    if (busy) return;
+    setBusy(true);
+    setData((prev) => (prev ? withDelivered(prev, stop.id, true) : prev));
+    setJustDone({ stop, left: UNDO_SECONDS });
     try {
       await riderFetch(`/tracking/drop-points/${stop.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ delivered }),
+        body: JSON.stringify({ delivered: true }),
       });
     } catch (e: any) {
-      setError(e?.message || 'Could not update that stop');
+      setJustDone(null);
+      setError(e?.message || 'Could not mark that stop delivered');
       await load();
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   };
 
-  /** Hands the next stop to Google Maps for turn-by-turn. Opening Maps costs no API call. */
-  const navigate = (s: Stop) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}`
-      + `&travelmode=${Platform.OS === 'android' ? 'two-wheeler' : 'driving'}`;
-    Linking.openURL(url).catch(() => setError('Could not open Google Maps'));
+  const undo = async () => {
+    if (!justDone || busy) return;
+    const { stop } = justDone;
+    setBusy(true);
+    setJustDone(null);
+    setData((prev) => (prev ? withDelivered(prev, stop.id, false) : prev));
+    try {
+      await riderFetch(`/tracking/drop-points/${stop.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ delivered: false }),
+      });
+    } catch (e: any) {
+      setError(e?.message || 'Could not undo — pull down to refresh');
+      await load();
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading) {
@@ -153,11 +186,13 @@ export default function DropPointList() {
   }
 
   const active = data.stops.filter((s) => s.count > 0);
-  const idle = data.stops.length - active.length;
   const next = active.find((s) => s.id === data.next_stop_id) || null;
   const pct = data.active_stops ? data.delivered_stops / data.active_stops : 0;
   const unroutedCount = data.unrouted.reduce((n, u) => n + u.count, 0);
   const dateLabel = new Date(`${data.date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+  // While the undo card is up, the stop that will come next is still "coming up".
+  const comingUp = active.filter((s) => !s.delivered && (justDone ? true : s.id !== next?.id));
 
   return (
     <View style={st.card}>
@@ -177,8 +212,35 @@ export default function DropPointList() {
             <View style={[st.barFill, { width: `${Math.round(pct * 100)}%` }]} />
           </View>
 
-          {/* The one the rider needs right now */}
-          {next ? (
+          {justDone ? (
+            /* Just delivered — Undo for a few seconds, then the next stop */
+            <View style={st.doneCard}>
+              <View style={st.doneRow}>
+                <Ionicons name="checkmark-circle" size={26} color={COLORS.accentGreen} />
+                <View style={{ flex: 1 }}>
+                  <Text style={st.doneTitle}>Delivered</Text>
+                  <Text style={st.doneLabel} numberOfLines={2}>
+                    #{justDone.stop.position} {justDone.stop.label} · {justDone.stop.count} Sehri
+                  </Text>
+                </View>
+              </View>
+              <View style={st.undoRow}>
+                <Text style={st.undoCount}>
+                  {next ? `Next stop in ${justDone.left}s` : `Last stop · closing in ${justDone.left}s`}
+                </Text>
+                <TouchableOpacity
+                  style={[st.undoBtn, busy && { opacity: 0.6 }]}
+                  onPress={undo}
+                  disabled={busy}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="arrow-undo" size={16} color={COLORS.textPrimary} />
+                  <Text style={st.undoTxt}>Undo</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : next ? (
+            /* The one the rider needs right now */
             <View style={st.nextCard}>
               <Text style={st.nextTag}>NEXT STOP · #{next.position}</Text>
               <View style={st.nextRow}>
@@ -194,21 +256,15 @@ export default function DropPointList() {
                   <Text style={st.countBigLbl}>Sehri</Text>
                 </View>
               </View>
-              <View style={st.nextActions}>
-                <TouchableOpacity style={st.navBtn} onPress={() => navigate(next)} activeOpacity={0.85}>
-                  <Ionicons name="navigate-outline" size={16} color={COLORS.primary} />
-                  <Text style={st.navTxt}>Navigate</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[st.doneBtn, busyId === next.id && { opacity: 0.6 }]}
-                  onPress={() => toggle(next)}
-                  disabled={!!busyId}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="checkmark-circle" size={17} color="#fff" />
-                  <Text style={st.doneTxt}>Mark delivered</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[st.deliverBtn, busy && { opacity: 0.6 }]}
+                onPress={() => markDelivered(next)}
+                disabled={busy}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                <Text style={st.deliverTxt}>Mark delivered</Text>
+              </TouchableOpacity>
             </View>
           ) : active.length > 0 ? (
             <View style={st.allDone}>
@@ -217,41 +273,18 @@ export default function DropPointList() {
             </View>
           ) : null}
 
-          {/* Every stop, in route order */}
-          {active.map((s) => {
-            const isNext = s.id === data.next_stop_id;
-            return (
-              <TouchableOpacity
-                key={s.id}
-                style={[st.row, isNext && st.rowNext, s.delivered && st.rowDone]}
-                onPress={() => toggle(s)}
-                disabled={!!busyId}
-                activeOpacity={0.75}
-              >
-                <Ionicons
-                  name={s.delivered ? 'checkbox' : 'square-outline'}
-                  size={22}
-                  color={s.delivered ? COLORS.accentGreen : isNext ? COLORS.primary : COLORS.textMuted}
-                />
-                <Text style={st.pos}>{s.position}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={[st.label, s.delivered && st.labelDone]} numberOfLines={1}>{s.label}</Text>
-                  <Text style={st.meta}>
-                    {s.mode === 'doorstep' ? 'to the door' : 'zone point'}
-                    {s.delivered && s.delivered_by ? ` · ✓ ${s.delivered_by}` : ''}
-                  </Text>
+          {/* Read-only: what is left, for packing and a sense of the route */}
+          {comingUp.length > 0 && (
+            <>
+              <Text style={st.subHeading}>COMING UP · {comingUp.length}</Text>
+              {comingUp.map((s) => (
+                <View key={s.id} style={st.upRow}>
+                  <Text style={st.upPos}>{s.position}</Text>
+                  <Text style={st.upLabel} numberOfLines={1}>{s.label}</Text>
+                  <Text style={st.upCount}>{s.count}</Text>
                 </View>
-                <View style={[st.count, s.delivered && { opacity: 0.5 }]}>
-                  <Text style={st.countTxt}>{s.count}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-
-          {idle > 0 && (
-            <Text style={st.idle}>
-              {idle} stop{idle > 1 ? 's have' : ' has'} no Sehri today and {idle > 1 ? 'are' : 'is'} skipped.
-            </Text>
+              ))}
+            </>
           )}
 
           {/* People who are owed Sehri but have no pin on the route */}
@@ -287,6 +320,10 @@ const st = StyleSheet.create({
   },
   headRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heading: { color: COLORS.primary, fontSize: 12, fontWeight: '800', letterSpacing: 0.6 },
+  subHeading: {
+    color: COLORS.textMuted, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6,
+    marginTop: 16, marginBottom: 4,
+  },
   date: { color: COLORS.textMuted, fontSize: 11.5 },
   summary: { color: COLORS.textSecondary, fontSize: 12.5, marginTop: 8 },
   bar: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 8, overflow: 'hidden' },
@@ -294,7 +331,7 @@ const st = StyleSheet.create({
   empty: { color: COLORS.textMuted, fontSize: 12.5, marginTop: 10, lineHeight: 19 },
 
   nextCard: {
-    marginTop: 14, marginBottom: 10, padding: 12,
+    marginTop: 14, padding: 12,
     borderRadius: SIZES.radius.md, borderWidth: 1.5, borderColor: COLORS.primary,
     backgroundColor: 'rgba(201,168,76,0.10)',
   },
@@ -306,42 +343,46 @@ const st = StyleSheet.create({
   countBig: { alignItems: 'center', minWidth: 52 },
   countBigNum: { color: COLORS.primary, fontSize: 24, fontWeight: '900' },
   countBigLbl: { color: COLORS.textMuted, fontSize: 10 },
-  nextActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  navBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 10, borderRadius: SIZES.radius.md,
-    borderWidth: 1, borderColor: COLORS.primary,
+  deliverBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    marginTop: 12, paddingVertical: 12, borderRadius: SIZES.radius.md,
+    backgroundColor: COLORS.accentGreen,
   },
-  navTxt: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
-  doneBtn: {
-    flex: 1.4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    paddingVertical: 10, borderRadius: SIZES.radius.md, backgroundColor: COLORS.accentGreen,
+  deliverTxt: { color: '#fff', fontSize: 14, fontWeight: '800' },
+
+  doneCard: {
+    marginTop: 14, padding: 12,
+    borderRadius: SIZES.radius.md, borderWidth: 1.5, borderColor: COLORS.accentGreen,
+    backgroundColor: 'rgba(76,175,80,0.12)',
   },
-  doneTxt: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  doneTitle: { color: COLORS.accentGreen, fontSize: 15, fontWeight: '800' },
+  doneLabel: { color: COLORS.textSecondary, fontSize: 12.5, marginTop: 2 },
+  undoRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12,
+  },
+  undoCount: { color: COLORS.textMuted, fontSize: 12 },
+  undoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 9, paddingHorizontal: 18, borderRadius: SIZES.radius.md,
+    borderWidth: 1, borderColor: COLORS.textSecondary,
+  },
+  undoTxt: { color: COLORS.textPrimary, fontSize: 13.5, fontWeight: '800' },
 
   allDone: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14,
     padding: 12, borderRadius: SIZES.radius.md, backgroundColor: 'rgba(76,175,80,0.12)',
   },
   allDoneTxt: { flex: 1, color: COLORS.accentGreen, fontSize: 13, fontWeight: '700' },
 
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: 9,
-    paddingVertical: 10, paddingHorizontal: 8, marginTop: 6,
-    borderRadius: SIZES.radius.sm, borderWidth: 1, borderColor: 'transparent',
+  upRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border,
   },
-  rowNext: { borderColor: 'rgba(201,168,76,0.5)', backgroundColor: 'rgba(201,168,76,0.06)' },
-  rowDone: { opacity: 0.55 },
-  pos: { color: COLORS.textMuted, fontSize: 12, fontWeight: '800', minWidth: 16, textAlign: 'center' },
-  label: { color: COLORS.textPrimary, fontSize: 13.5, fontWeight: '600' },
-  labelDone: { textDecorationLine: 'line-through', color: COLORS.textSecondary },
-  meta: { color: COLORS.textMuted, fontSize: 10.5, marginTop: 2 },
-  count: {
-    minWidth: 34, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
-    backgroundColor: 'rgba(201,168,76,0.16)', alignItems: 'center',
-  },
-  countTxt: { color: COLORS.primary, fontSize: 13, fontWeight: '800' },
-  idle: { color: COLORS.textMuted, fontSize: 11, marginTop: 10, fontStyle: 'italic' },
+  upPos: { color: COLORS.textMuted, fontSize: 12, fontWeight: '800', minWidth: 18, textAlign: 'center' },
+  upLabel: { flex: 1, color: COLORS.textSecondary, fontSize: 13 },
+  upCount: { color: COLORS.primary, fontSize: 13, fontWeight: '800', minWidth: 28, textAlign: 'right' },
 
   warnBox: {
     marginTop: 14, padding: 11, borderRadius: SIZES.radius.md,
