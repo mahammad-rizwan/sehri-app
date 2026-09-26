@@ -105,7 +105,9 @@ const listBroadcasts = async (req, res) => {
     return success(res, shaped);
   } catch (err) {
     logger.error('listBroadcasts error:', err);
-    return error(res, `Failed to load announcements: ${err.message}`, 500);
+    return error(res, process.env.NODE_ENV === 'production'
+      ? 'Failed to load announcements'
+      : `Failed to load announcements: ${err.message}`, 500);
   }
 };
 

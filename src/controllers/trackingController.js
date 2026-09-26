@@ -96,7 +96,8 @@ const createRider = async (req, res) => {
     if (existing) return error(res, 'A rider with this phone already exists', 400);
 
     const hashedPassword = await bcrypt.hash(rider_password, 10);
-    const today = new Date().toISOString().slice(0, 10);
+    // IST calendar date — plain toISOString() gives yesterday before 5:30 AM IST.
+    const today = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     const rider = await Tracking.create({
       rider_name,
@@ -167,6 +168,18 @@ const pushLocation = async (req, res) => {
 
     if (latitude === undefined || longitude === undefined) {
       return error(res, 'latitude and longitude are required', 400);
+    }
+
+    /**
+     * Only the rider themselves may move their pin (a super admin may too).
+     * Every signed-in user can see rider ids through /tracking/active, so
+     * without this anyone could post fake coordinates — moving the live pin on
+     * everyone's map and firing "on the way" / "at your doorstep" alerts to
+     * every Sehri recipient.
+     */
+    const isSelf = req.userRole === 'rider' && req.user?.id === id;
+    if (!isSelf && req.userRole !== 'super_admin') {
+      return error(res, 'You can only update your own location', 403);
     }
 
     const rider = await Tracking.findByPk(id);

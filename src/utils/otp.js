@@ -209,7 +209,8 @@ const verifyOTP = async (phone, code, purpose) => {
     ? record.otp.substring(0, record.otp.indexOf('::'))
     : record.otp;
 
-  logger.info(`Validating verificationId=${verificationId} code=${code}`);
+  // Never log the code itself — anyone reading logs could reuse a live one.
+  logger.info(`Validating verificationId=${verificationId} (code: ${String(code).length} digits)`);
 
   // Try GET first (as shown in docs curl example), then POST as fallback
   let resp = await apiCall('GET',

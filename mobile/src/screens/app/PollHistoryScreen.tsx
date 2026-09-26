@@ -87,7 +87,13 @@ export default function PollHistoryScreen() {
     return new Set(data?.pollDates || []);
   }, [data]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Local calendar date, matching how the grid below builds each cell's date.
+  // toISOString() is UTC, which is still yesterday before 5:30 AM IST — right
+  // when people check this during Sehri.
+  const todayStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
 
   const getDayColor = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;

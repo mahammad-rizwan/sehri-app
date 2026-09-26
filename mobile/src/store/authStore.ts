@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
-import api from '../services/api';
+import api, { setSessionExpiredHandler } from '../services/api';
+import { router } from 'expo-router';
+import Toast from 'react-native-toast-message';
 import { ENDPOINTS } from '../constants/api';
 import { registerForPushNotifications } from '../services/notificationService';
 import { reconcileContentVersions } from '../services/contentSync';
@@ -277,3 +279,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return data;
   },
 }));
+
+// When a session can no longer be renewed, sign out properly and say why,
+// instead of leaving every screen failing while the app thinks it is signed in.
+setSessionExpiredHandler(async () => {
+  await useAuthStore.getState().logout();
+  Toast.show({ type: 'info', text1: 'Session expired', text2: 'Please sign in again.' });
+  try { router.replace('/(auth)/welcome'); } catch { /* navigator not ready yet */ }
+});

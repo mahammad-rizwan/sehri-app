@@ -35,7 +35,9 @@ const getRamadanStatus = async (req, res) => {
     });
   } catch (err) {
     logger.error('getRamadanStatus error:', err);
-    return error(res, `Failed to read Ramadan status: ${err.message}`, 500);
+    return error(res, process.env.NODE_ENV === 'production'
+      ? 'Failed to read Ramadan status'
+      : `Failed to read Ramadan status: ${err.message}`, 500);
   }
 };
 

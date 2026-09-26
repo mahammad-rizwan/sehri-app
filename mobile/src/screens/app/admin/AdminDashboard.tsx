@@ -69,7 +69,7 @@ export default function AdminDashboard() {
       // Fetch donation summary for both admin and super admin
       try { 
         const donRes = await api.get(ENDPOINTS.DONATION_SUMMARY); 
-        console.log('[AdminDashboard] Donation summary:', donRes.data.data);
+        // Not logged: the payload holds donor names and phone numbers.
         setDonationSummary(donRes.data.data); 
       } catch (err) {
         console.error('[AdminDashboard] Failed to fetch donation summary:', err);

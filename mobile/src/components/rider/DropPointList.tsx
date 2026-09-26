@@ -2,9 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
 import { COLORS, SIZES } from '../../constants/theme';
-import { API_BASE_URL } from '../../constants/api';
+import { riderJson } from '../../services/riderApi';
 import { type MapSymbol } from '../../constants/mapData';
 import { SymbolBadge } from '../map/MapPin';
 
@@ -39,29 +38,8 @@ const REFRESH_MS = 30000;
 /** How long "Delivered" stays on screen with an Undo before moving on. */
 const UNDO_SECONDS = 7;
 
-/**
- * Plain fetch with the rider's token, the same way the rest of the rider screen
- * talks to the server. The shared `api` client is deliberately not used: its
- * 401 handler clears stored tokens, which would log a rider out mid-delivery.
- */
-async function riderFetch(path: string, init?: RequestInit) {
-  const token = await SecureStore.getItemAsync('accessToken');
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...(init?.headers || {}),
-    },
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err: any = new Error(body?.message || `Request failed (${res.status})`);
-    err.status = res.status;
-    throw err;
-  }
-  return body?.data;
-}
+/** Rider requests renew an expired token themselves — see services/riderApi. */
+const riderFetch = riderJson;
 
 /** Recomputes the derived counters after a stop is ticked or un-ticked locally. */
 function withDelivered(prev: DropPoints, id: string, delivered: boolean): DropPoints {

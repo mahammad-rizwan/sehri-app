@@ -280,8 +280,20 @@ const getDonationSummary = async (req, res) => {
       status:       d.status,
       message:      d.message || null,
       proof_url:    d.proof_url || null,
-      created_at:   d.created_at,
+      // DATE_FORMAT returns the stored UTC time with no zone marker, which the
+      // app read as local time — every donation showed 5½ hours early. Say UTC.
+      created_at:   d.created_at ? `${String(d.created_at).replace(' ', 'T')}Z` : null,
     }));
+
+    // Zone admins are shown two totals and nothing else. Sending them every
+    // donor's name, phone and proof link — across all zones — exposed data
+    // their screen never uses.
+    if (req.userRole !== 'super_admin') {
+      return success(res, {
+        total_amount:    parseFloat(totals.total_amount),
+        total_donations: parseInt(totals.total_donations),
+      });
+    }
 
     return success(res, {
       total_amount:    parseFloat(totals.total_amount),
@@ -298,7 +310,9 @@ const getDonationSummary = async (req, res) => {
     });
   } catch (err) {
     logger.error('getDonationSummary error:', err);
-    return error(res, `Failed to fetch donation summary: ${err.message}`, 500);
+    return error(res, process.env.NODE_ENV === 'production'
+      ? 'Failed to fetch donation summary'
+      : `Failed to fetch donation summary: ${err.message}`, 500);
   }
 };
 

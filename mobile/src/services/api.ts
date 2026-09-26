@@ -2,6 +2,16 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL, API_TIMEOUT } from '../constants/api';
 
+/**
+ * Called once when a real session can no longer be renewed, so the app can
+ * sign out and show the welcome screen. Before this the tokens were cleared
+ * silently: the app still believed it was signed in, and every screen just
+ * failed until it was restarted.
+ */
+let onSessionExpired: (() => void) | null = null;
+let expiredFired = false;
+export function setSessionExpiredHandler(fn: () => void) { onSessionExpired = fn; }
+
 class ApiService {
   private instance: AxiosInstance;
 
@@ -41,8 +51,9 @@ class ApiService {
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
 
+          // Guests have no refresh token; their 401s must not sign anyone out.
+          const refreshToken = await SecureStore.getItemAsync('refreshToken');
           try {
-            const refreshToken = await SecureStore.getItemAsync('refreshToken');
             if (!refreshToken) throw new Error('No refresh token');
 
             const { data } = await axios.post(
@@ -58,7 +69,13 @@ class ApiService {
             return this.instance(originalRequest);
           } catch {
             await this.clearTokens();
-            // Navigate to login — handled in app
+            // Only a session that existed can expire. Several requests failing
+            // together report it once.
+            if (refreshToken && onSessionExpired && !expiredFired) {
+              expiredFired = true;
+              onSessionExpired();
+              setTimeout(() => { expiredFired = false; }, 5000);
+            }
           }
         }
         return Promise.reject(error);

@@ -450,7 +450,12 @@ export default function HomeScreen() {
         {
           text: 'Confirm', onPress: async () => {
             try { setPollLoading(true); await api.post(ENDPOINTS.POLL_RESPOND(poll.id), { response }); setPollResponse(response); if (response === 'yes') setZoneYesCount((c) => c + 1); else if (response === 'no' && pollResponse === 'yes') setZoneYesCount((c) => Math.max(0, c - 1)); Toast.show({ type: 'success', text1: response === 'yes' ? "✅ Noted! We'll prepare your Sehri" : "✅ Noted! May Allah accept your fast" }); }
-            catch (err: any) { Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to submit' }); }
+            catch (err: any) {
+              Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to submit' });
+              // 403 = the window closed while this screen was open. Reload so it
+              // moves on to the special-case step instead of offering dead buttons.
+              if (err?.response?.status === 403) loadData();
+            }
             finally { setPollLoading(false); }
           },
         },
@@ -466,7 +471,10 @@ export default function HomeScreen() {
       {
         text: 'Confirm', onPress: async () => {
           try { setSpecialCaseLoading(true); await api.post(ENDPOINTS.POLL_SPECIAL_CASE(poll.id), { type }); setIsSpecialCase(true); setSpecialCaseType(type); Toast.show({ type: 'success', text1: type === 'want' ? '✅ Special case noted' : '✅ Preference updated' }); }
-          catch (err: any) { Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed' }); }
+          catch (err: any) {
+            Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed' });
+            if (err?.response?.status === 403) loadData();
+          }
           finally { setSpecialCaseLoading(false); }
         },
       },

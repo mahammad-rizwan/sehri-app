@@ -1,4 +1,4 @@
-﻿const { Poll, PollResponse, User } = require('../models');
+﻿const { Poll, PollResponse, User, AppSetting } = require('../models');
 const { sendPollEnabledNotification, sendPollDisabledNotification, sendPushNotification } = require('../services/expoPushService');
 const { success, error } = require('../utils/response');
 const { sequelize } = require('../database/connection');
@@ -327,6 +327,16 @@ const undoSpecialCase = async (req, res) => {
     const poll = await Poll.findByPk(pollId);
     if (!poll) return error(res, 'Poll not found', 404);
 
+    if (!(await AppSetting.isRamadanActive())) {
+      return error(res, 'Sehri polls are closed outside Ramadan', 403);
+    }
+    // Only today's poll. Without this a special case could be filed against
+    // any past poll during 10 AM–5 PM, silently rewriting that day's history
+    // with a request nobody would ever review.
+    if (poll.date !== getTodayISTDate()) {
+      return error(res, 'Special cases can only be requested for today\'s poll', 403);
+    }
+
     if (!isSpecialCaseAllowed(poll)) {
       return error(res, 'Special case window is open only from 10:00 AM to 5:00 PM', 403);
     }
@@ -362,6 +372,16 @@ const submitSpecialCase = async (req, res) => {
 
     const poll = await Poll.findByPk(pollId);
     if (!poll) return error(res, 'Poll not found', 404);
+
+    if (!(await AppSetting.isRamadanActive())) {
+      return error(res, 'Sehri polls are closed outside Ramadan', 403);
+    }
+    // Only today's poll. Without this a special case could be filed against
+    // any past poll during 10 AM–5 PM, silently rewriting that day's history
+    // with a request nobody would ever review.
+    if (poll.date !== getTodayISTDate()) {
+      return error(res, 'Special cases can only be requested for today\'s poll', 403);
+    }
 
     if (!isSpecialCaseAllowed(poll)) {
       return error(res, 'Special case window is open only from 10:00 AM to 5:00 PM', 403);
@@ -415,7 +435,23 @@ const respondToPoll = async (req, res) => {
     }
 
     const poll = await Poll.findByPk(pollId);
-    if (!poll || !poll.is_active) return error(res, 'Poll not found or inactive', 404);
+    if (!poll) return error(res, 'Poll not found', 404);
+
+    if (!(await AppSetting.isRamadanActive())) {
+      return error(res, 'Sehri polls are closed outside Ramadan', 403);
+    }
+
+    /**
+     * Votes count only for the poll that is open right now, and only while its
+     * window is open. The stored `is_active` flag is not enough on its own: it
+     * is re-synced only when someone loads the poll, so a phone left on the
+     * poll screen from 9:55 could still vote at 11 AM, and an old poll could be
+     * voted on after its food was delivered. getPhase() reads the clock and
+     * honours a super admin's manual open/close.
+     */
+    if (poll.date !== getActivePollDate() || getPhase(poll) !== 'voting') {
+      return error(res, 'Voting for this poll has closed', 403);
+    }
 
     const [pollResponse, created] = await PollResponse.upsert({
       poll_id: pollId,

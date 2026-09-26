@@ -37,9 +37,17 @@ const getAllFeedback = async (req, res) => {
     if (category) where.category = category;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
+    // The form tells users it goes to *their zone admin*. Without this every
+    // zone admin read every zone's feedback, with name, phone and address.
+    const userWhere = req.userRole === 'admin' ? { zone: req.user.zone } : undefined;
+
     const { count, rows } = await Feedback.findAndCountAll({
       where,
-      include: [{ model: User, attributes: ['id', 'name', 'phone', 'zone', 'address'] }],
+      include: [{
+        model: User,
+        attributes: ['id', 'name', 'phone', 'zone', 'address'],
+        ...(userWhere ? { where: userWhere, required: true } : {}),
+      }],
       order: [['created_at', 'DESC']],
       limit: parseInt(limit),
       offset,
@@ -63,8 +71,13 @@ const markFeedbackRead = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const feedback = await Feedback.findByPk(id);
+    const feedback = await Feedback.findByPk(id, {
+      include: [{ model: User, attributes: ['zone'] }],
+    });
     if (!feedback) return error(res, 'Feedback not found', 404);
+    if (req.userRole === 'admin' && feedback.User?.zone !== req.user.zone) {
+      return error(res, 'That feedback is from another zone', 403);
+    }
 
     await feedback.update({ is_read: !feedback.is_read });
     return success(res, {}, feedback.is_read ? 'Feedback marked as read' : 'Feedback marked as unread');

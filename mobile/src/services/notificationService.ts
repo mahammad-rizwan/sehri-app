@@ -145,6 +145,9 @@ export function addNotificationResponseListener(handler: (screen?: string, data?
     const data = response.notification.request.content.data;
     if (data?.screen === 'chat' && data?.groupId) {
       handler('chat', { groupId: data.groupId });
+    } else if (data?.screen === 'reports' || data?.screen === 'my-reports') {
+      // New report for a reviewer / outcome of your own report.
+      handler(data.screen as string);
     } else if (data?.screen === 'tracking') {
       // Delivery alerts open live tracking, so they can see where the rider is.
       handler('tracking');

@@ -37,7 +37,9 @@ const listAddresses = async (req, res) => {
     })));
   } catch (err) {
     logger.error('listAddresses error:', err);
-    return error(res, `Failed to load addresses: ${err.message}`, 500);
+    return error(res, process.env.NODE_ENV === 'production'
+      ? 'Failed to load addresses'
+      : `Failed to load addresses: ${err.message}`, 500);
   }
 };
 
@@ -157,7 +159,9 @@ const listMarkers = async (req, res) => {
     })));
   } catch (err) {
     logger.error('listMarkers error:', err);
-    return error(res, `Failed to load map markers: ${err.message}`, 500);
+    return error(res, process.env.NODE_ENV === 'production'
+      ? 'Failed to load map markers'
+      : `Failed to load map markers: ${err.message}`, 500);
   }
 };
 

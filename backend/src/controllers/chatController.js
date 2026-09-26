@@ -3,7 +3,7 @@ const { ChatGroup, ChatGroupMember, ChatMessage, Admin, User, SuperAdmin } = req
 const { success, error, paginated } = require('../utils/response');
 const logger = require('../utils/logger');
 const { sendPushNotification } = require('../services/expoPushService');
-const { getIO } = require('../services/socketService');
+const { getIO, evictFromGroup } = require('../services/socketService');
 
 /**
  * POST /chat/groups — Create a chat group (super_admin only)
@@ -201,6 +201,9 @@ const removeMember = async (req, res) => {
     }
 
     await member.destroy();
+
+    // Their open chat is still subscribed to the room; cut it off now.
+    evictFromGroup(id, userId).catch((e) => logger.warn(`evictFromGroup failed: ${e.message}`));
 
     const count = await ChatGroupMember.count({ where: { group_id: id } });
     return success(res, { member_count: count }, 'Member removed');

@@ -12,6 +12,7 @@ import * as SecureStore from 'expo-secure-store';
 import { COLORS, SIZES, RESPONSIVE } from '../../src/constants/theme';
 import { API_BASE_URL } from '../../src/constants/api';
 import DropPointList from '../../src/components/rider/DropPointList';
+import { riderRequest, riderJson } from '../../src/services/riderApi';
 
 const LOCATION_TASK_NAME = 'sehri-rider-broadcast';
 
@@ -24,16 +25,12 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
   try {
     const riderId = await SecureStore.getItemAsync('riderId');
-    const token = await SecureStore.getItemAsync('accessToken');
-    if (!riderId || !token) return;
+    if (!riderId) return;
 
-    await fetch(`${API_BASE_URL}/tracking/${riderId}/push-location`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true',
-            Authorization: `Bearer ${token}`,
-          },
+    // riderRequest renews an expired token itself; before, the task kept
+    // sending a dead token and every update was rejected unseen.
+    await riderRequest(`/tracking/${riderId}/push-location`, {
+      method: 'PATCH',
       body: JSON.stringify({
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
@@ -98,13 +95,10 @@ export default function BroadcastScreen() {
       const { latitude, longitude } = await getPosition();
       setCoords({ lat: latitude, lng: longitude });
 
-      await fetch(`${API_BASE_URL}/tracking/${id}/push-location`, {
+      // Throws on 401 / 429 / 5xx. Plain fetch did not, so a rejected push used
+      // to show a fresh "Last update" as if it had worked.
+      await riderJson(`/tracking/${id}/push-location`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-          Authorization: `Bearer ${await SecureStore.getItemAsync('accessToken')}`,
-        },
         body: JSON.stringify({ latitude, longitude, status: 'delivering' }),
       });
 
@@ -231,13 +225,8 @@ export default function BroadcastScreen() {
     // Mark as completed on server
     if (riderId && coords) {
       try {
-        await fetch(`${API_BASE_URL}/tracking/${riderId}/push-location`, {
+        await riderRequest(`/tracking/${riderId}/push-location`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true',
-            Authorization: `Bearer ${await SecureStore.getItemAsync('accessToken')}`,
-          },
           body: JSON.stringify({
             latitude: coords.lat,
             longitude: coords.lng,

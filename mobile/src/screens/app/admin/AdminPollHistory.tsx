@@ -30,7 +30,13 @@ export default function AdminPollHistory() {
   const [selectedZoneInfo, setSelectedZoneInfo] = useState<any>(null);
   const [voterModalVisible, setVoterModalVisible] = useState(false);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Local calendar date, matching how the grid below builds each cell's date.
+  // toISOString() is UTC, which is still yesterday before 5:30 AM IST — right
+  // when people check this during Sehri.
+  const todayStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
 
   const fetchPollDates = async () => {
     try {

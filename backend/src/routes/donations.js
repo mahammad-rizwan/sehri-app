@@ -33,7 +33,9 @@ router.post('/submit', optionalAuth, upload.single('proof'), submitDonation);
 router.patch('/:id/status', authenticate, authorize('super_admin'), updateDonationStatus);
 router.get('/history', authenticate, getDonationHistory);
 router.get('/summary', authenticate, authorize('admin', 'super_admin'), getDonationSummary);
-router.get('/:id/proof', authenticate, authorize('admin', 'super_admin'), getDonationProof);
+// Payment proofs are reviewed by the super admin only; zone admins have no
+// donation-history screen and no reason to download them.
+router.get('/:id/proof', authenticate, authorize('super_admin'), getDonationProof);
 
 // Multer error handler (file too large / wrong type)
 router.use((err, req, res, next) => {

@@ -29,6 +29,9 @@ function setupSocket(httpServer) {
       if (!user) return next(new Error('User not found'));
 
       socket.user = { id: user.id, name: user.name, role: decoded.role };
+      // Mirrored on socket.data, which is what fetchSockets() exposes — used to
+      // evict a member's live connection when they are removed from a group.
+      socket.data.user = socket.user;
 
       const memberships = await ChatGroupMember.findAll({
         where: { user_id: user.id, user_type: decoded.role },
@@ -46,8 +49,24 @@ function setupSocket(httpServer) {
   io.on('connection', (socket) => {
     logger.info(`Socket connected: ${socket.user.name} (${socket.user.role})`);
 
-    socket.on('join-group', (groupId) => {
-      socket.join(`group:${groupId}`);
+    /**
+     * Only members may join a group's room. Without this check any signed-in
+     * account — a regular user included — could emit join-group with a group
+     * id and receive that chat's messages live, bypassing the membership rule
+     * every REST chat route enforces.
+     */
+    socket.on('join-group', async (groupId) => {
+      try {
+        if (typeof groupId !== 'string' || !groupId) return;
+        const member = await ChatGroupMember.findOne({
+          where: { group_id: groupId, user_id: socket.user.id, user_type: socket.user.role },
+          attributes: ['id'],
+        });
+        if (member) socket.join(`group:${groupId}`);
+        else logger.warn(`Refused join-group ${groupId} for non-member ${socket.user.role} ${socket.user.id}`);
+      } catch (err) {
+        logger.error('join-group check failed:', err.message);
+      }
     });
 
     socket.on('leave-group', (groupId) => {
@@ -63,9 +82,23 @@ function setupSocket(httpServer) {
   return io;
 }
 
+/**
+ * Drops a user's live connections out of a group's room — called when they
+ * are removed, so they stop receiving its messages immediately rather than at
+ * their next reconnect.
+ */
+async function evictFromGroup(groupId, userId) {
+  if (!io) return;
+  const room = `group:${groupId}`;
+  const sockets = await io.in(room).fetchSockets();
+  sockets
+    .filter((s) => s.data?.user?.id === userId)
+    .forEach((s) => s.leave(room));
+}
+
 function getIO() {
   if (!io) throw new Error('Socket.IO not initialized');
   return io;
 }
 
-module.exports = { setupSocket, getIO };
+module.exports = { setupSocket, getIO, evictFromGroup };
