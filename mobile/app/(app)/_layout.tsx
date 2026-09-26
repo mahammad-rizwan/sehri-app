@@ -177,7 +177,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
  * Screens that are only ever opened from the Profile tab. Sending them back to
  * Home would drop the user somewhere they never came from.
  */
-const FROM_PROFILE = new Set(['feedback', 'poll-history']);
+const FROM_PROFILE = new Set(['feedback', 'poll-history', 'my-reports']);
 
 function BackBtn({ target, name }: { target: string; name: string }) {
   const router = useRouter();
@@ -191,7 +191,8 @@ function BackBtn({ target, name }: { target: string; name: string }) {
     : (target.includes('admin') ? 'Dashboard' : 'Home');
 
   const destination = isIndividualChat ? '/(app)/admin/chat'
-    : fromProfile ? '/(app)/profile'
+    // Admins reach My Reports from their own profile, not the user one.
+    : fromProfile ? (target.includes('admin') ? '/(app)/admin/profile' : '/(app)/profile')
     : target;
   
   return (
@@ -259,7 +260,7 @@ export default function AppLayout() {
     if (activeRole === 'user') {
       return [
         ...USER_VISIBLE,
-        'feedback', 'poll-history', 'rider', 'broadcast',
+        'feedback', 'poll-history', 'rider', 'broadcast', 'my-reports',
         'dua/category/[id]', 'dua/bookmarks',
       ];
     }
@@ -272,9 +273,9 @@ export default function AppLayout() {
       // is a tab for zone admins but not for super admins, so it needs listing
       // here too.
       'admin/profile-edit-requests', 'admin/broadcast', 'admin/sync-data',
-      'admin/ramadan', 'admin/places',
+      'admin/ramadan', 'admin/places', 'admin/reports',
       'admin/poll-history',
-      'feedback', 'poll-history', 'rider', 'broadcast',
+      'feedback', 'poll-history', 'rider', 'broadcast', 'my-reports',
     ];
   }, [activeRole]);
 

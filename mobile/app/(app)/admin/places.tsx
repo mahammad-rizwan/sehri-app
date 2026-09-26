@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, SIZES } from '../../../src/constants/theme';
 import { SYMBOL_META, SYMBOL_KEYS, type MapSymbol } from '../../../src/constants/mapData';
 import MapPicker from '../../../src/components/admin/MapPicker';
+import { SymbolBadge } from '../../../src/components/map/MapPin';
 import {
   fetchAddresses, createAddress, updateAddress, deleteAddress,
   fetchMapMarkers, createMarker, updateMarker, deleteMarker, reorderMarkers,
@@ -549,7 +550,7 @@ export default function PlacesManagement() {
                 ) : (
                   <Text style={st.pathMeta}>
                     No path yet. Until you generate one, the map joins the stops with straight
-                    dashed lines.
+                    lines.
                   </Text>
                 )}
 
@@ -790,9 +791,7 @@ function MarkerRow({
       {grip && <Ionicons name="reorder-three-outline" size={17} color={COLORS.textMuted} />}
       <Text style={st.seqBadge}>{badge}</Text>
 
-      <View style={[st.dot, { backgroundColor: meta.color }]}>
-        <Text style={st.dotTxt}>{meta.emoji}</Text>
-      </View>
+      <SymbolBadge symbol={m.symbol as MapSymbol} size={30} />
 
       <View style={{ flex: 1 }}>
         <Text style={[st.rowName, !m.is_active && { color: COLORS.textMuted }]} numberOfLines={1}>
@@ -866,12 +865,6 @@ const st = StyleSheet.create({
   },
   restoreTxt: { color: COLORS.primary, fontSize: 11.5, fontWeight: '700' },
 
-  dot: {
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.8)',
-  },
-  dotTxt: { fontSize: 14 },
   seqBadge: {
     color: COLORS.primary, fontSize: 12, fontWeight: '800',
     minWidth: 18, textAlign: 'center',

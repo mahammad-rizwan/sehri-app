@@ -25,12 +25,17 @@ export const MARKER_COLORS = {
  * how each one draws. The keys match MapMarker.SYMBOLS on the server.
  */
 export const SYMBOL_META = {
-  masjid:      { label: 'Masjid',            emoji: '🕌', color: MARKER_COLORS.masjid },
-  boys_hostel: { label: 'Boys Hostel',       emoji: '🏠', color: MARKER_COLORS.boys_hostel },
-  stanza:      { label: 'Stanza',            emoji: '🏡', color: MARKER_COLORS.stanza },
-  girls:       { label: 'Girls Zone',        emoji: '🌸', color: MARKER_COLORS.girls },
-  distributor: { label: 'Distribution Point', emoji: '📦', color: MARKER_COLORS.distributor },
+  // Pins and badges draw `icon` (a MaterialCommunityIcons name) when there is
+  // one, otherwise the emoji. Only the masjid uses a vector glyph.
+  masjid:      { label: 'Masjid',             emoji: '🕌', icon: 'mosque', color: MARKER_COLORS.masjid },
+  boys_hostel: { label: 'Boys Hostel',        emoji: '🏠', icon: null,     color: MARKER_COLORS.boys_hostel },
+  stanza:      { label: 'Stanza',             emoji: '🏡', icon: null,     color: MARKER_COLORS.stanza },
+  girls:       { label: 'Girls Zone',         emoji: '🌸', icon: null,     color: MARKER_COLORS.girls },
+  distributor: { label: 'Distribution Point', emoji: '📦', icon: null,     color: MARKER_COLORS.distributor },
 } as const;
+
+/** The rider on the map. */
+export const RIDER_EMOJI = '🛵';
 
 export type MapSymbol = keyof typeof SYMBOL_META;
 export const SYMBOL_KEYS = Object.keys(SYMBOL_META) as MapSymbol[];
@@ -38,7 +43,7 @@ export const SYMBOL_KEYS = Object.keys(SYMBOL_META) as MapSymbol[];
 /** Legend under the map — the symbols, plus the one thing that moves. */
 export const MAP_LEGEND = [
   ...SYMBOL_KEYS.map((key) => ({ key, ...SYMBOL_META[key] })),
-  { key: 'rider', label: 'Live Rider', emoji: '🛵', color: MARKER_COLORS.rider },
+  { key: 'rider', label: 'Live Rider', emoji: RIDER_EMOJI, icon: null, color: MARKER_COLORS.rider },
 ];
 
 export type LatLng = { latitude: number; longitude: number };

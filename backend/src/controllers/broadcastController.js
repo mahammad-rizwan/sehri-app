@@ -97,6 +97,8 @@ const listBroadcasts = async (req, res) => {
         // would 403. A super admin may remove anything, including a zone
         // admin's announcement; an admin only their own.
         can_delete: req.userRole === 'super_admin' || m.sender_id === req.user.id,
+        // Nobody reports their own post; the app hides Report when true.
+        is_mine: m.sender_id === req.user.id && m.sender_role === req.userRole,
       } : {}),
     }));
 

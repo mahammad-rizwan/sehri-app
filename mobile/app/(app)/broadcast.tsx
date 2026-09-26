@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl,
-  ActivityIndicator, Linking, Alert, Platform,
+  ActivityIndicator, Linking, Alert, Platform, Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,8 @@ import { COLORS, SIZES } from '../../src/constants/theme';
 import api from '../../src/services/api';
 import { ENDPOINTS } from '../../src/constants/api';
 import { markBroadcastsSeen } from '../../src/services/broadcastBadge';
+import MessageActionSheet from '../../src/components/content/MessageActionSheet';
+import ReportSheet from '../../src/components/content/ReportSheet';
 
 type Broadcast = {
   id: string;
@@ -19,6 +21,8 @@ type Broadcast = {
   sender_name: string;
   sender_role: 'admin' | 'super_admin';
   created_at: string;
+  /** Only sent to staff. Nobody is offered Report on their own post. */
+  is_mine?: boolean;
 };
 
 
@@ -56,6 +60,9 @@ export default function BroadcastFeed() {
   const [items, setItems] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // Long press (or ⋮) opens the menu; Report opens the form.
+  const [menuFor, setMenuFor] = useState<Broadcast | null>(null);
+  const [reportFor, setReportFor] = useState<Broadcast | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -119,12 +126,22 @@ export default function BroadcastFeed() {
           </View>
         ) : (
           items.map((m) => (
-            <View key={m.id} style={st.card}>
+            <Pressable
+              key={m.id}
+              style={({ pressed }) => [st.card, pressed && { opacity: 0.85 }]}
+              onLongPress={() => setMenuFor(m)}
+              delayLongPress={350}
+            >
               {/* No channel or zone shown — to the reader this is simply an
                   announcement, not a bucket they were sorted into. */}
               <View style={st.cardTop}>
                 <Text style={st.announceTag}>📢 Announcement</Text>
-                <Text style={st.time}>{relative(m.created_at)}</Text>
+                <View style={st.topRight}>
+                  <Text style={st.time}>{relative(m.created_at)}</Text>
+                  <TouchableOpacity onPress={() => setMenuFor(m)} hitSlop={10} style={st.more}>
+                    <Ionicons name="ellipsis-vertical" size={16} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <Text style={st.body}>{m.body}</Text>
@@ -143,10 +160,24 @@ export default function BroadcastFeed() {
               <Text style={st.sender}>
                 {m.sender_name} · {m.sender_role === 'super_admin' ? 'Organiser' : 'Zone Admin'}
               </Text>
-            </View>
+            </Pressable>
           ))
         )}
       </ScrollView>
+
+      <MessageActionSheet
+        visible={!!menuFor}
+        text={menuFor?.body || ''}
+        onClose={() => setMenuFor(null)}
+        onReport={menuFor && !menuFor.is_mine ? () => setReportFor(menuFor) : undefined}
+      />
+      <ReportSheet
+        visible={!!reportFor}
+        targetType="broadcast"
+        targetId={reportFor?.id || null}
+        preview={reportFor?.body || ''}
+        onClose={() => setReportFor(null)}
+      />
     </LinearGradient>
   );
 }
@@ -172,6 +203,8 @@ const st = StyleSheet.create({
     marginBottom: SIZES.spacing.sm,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  more: { paddingLeft: 4, paddingVertical: 2 },
   announceTag: { color: COLORS.primary, fontSize: 11, fontWeight: '700' },
   time: { color: COLORS.textMuted, fontSize: 10.5 },
   body: { color: COLORS.textPrimary, fontSize: 14.5, lineHeight: 22, marginTop: 10 },

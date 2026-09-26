@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 import { COLORS, SIZES } from '../../constants/theme';
 import { isExpoGo } from '../../utils/runtime';
 import { MAP_STYLE, DEFAULT_REGION, SYMBOL_META, LatLng } from '../../constants/mapData';
+import { MapPin, PIN_ANCHOR } from '../map/MapPin';
 
 // Same reasoning as DeliveryMap: Google everywhere except iOS Expo Go, which
 // has no Google Maps SDK compiled in and would fall back to Cupertino.
@@ -44,7 +45,6 @@ export default function MapPicker({
     if (visible) setPoint(initial || null);
   }, [visible, initial?.latitude, initial?.longitude]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const meta = SYMBOL_META[symbol || 'distributor'] || SYMBOL_META.distributor;
 
   const goToMyLocation = async () => {
     try {
@@ -98,10 +98,9 @@ export default function MapPicker({
               onDragEnd={(e) => setPoint(e.nativeEvent.coordinate)}
               // A dragged pin re-renders constantly, so tracking has to stay on.
               tracksViewChanges
+              anchor={PIN_ANCHOR}
             >
-              <View style={[st.pin, { backgroundColor: meta.color }]}>
-                <Text style={st.pinEmoji}>{meta.emoji}</Text>
-              </View>
+              <MapPin symbol={symbol || 'distributor'} />
             </Marker>
           )}
         </MapView>
@@ -148,12 +147,6 @@ export default function MapPicker({
 
 const st = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: COLORS.background },
-  pin: {
-    width: 34, height: 34, borderRadius: 17,
-    borderWidth: 2.5, borderColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  pinEmoji: { fontSize: 15 },
 
   hint: {
     position: 'absolute', top: Platform.OS === 'ios' ? 54 : 18,

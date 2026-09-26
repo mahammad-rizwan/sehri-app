@@ -29,6 +29,7 @@ const syncRoutes = require('./routes/sync');
 const broadcastRoutes = require('./routes/broadcast');
 const settingsRoutes = require('./routes/settings');
 const placesRoutes = require('./routes/places');
+const reportRoutes = require('./routes/reports');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -75,6 +76,7 @@ app.use('/api/sync', syncRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/places', placesRoutes);
+app.use('/api/reports', reportRoutes);
 
 // ─────────────── 404 Handler ───────────────
 app.use((req, res) => {

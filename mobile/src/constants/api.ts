@@ -86,6 +86,12 @@ export const ENDPOINTS = {
   DROP_POINTS: '/tracking/drop-points',
   DROP_POINT: (markerId: string) => `/tracking/drop-points/${markerId}`,
 
+  // Content reports (announcements + chat)
+  REPORTS: '/reports',
+  MY_REPORTS: '/reports/mine',
+  REPORTS_PENDING: '/reports/pending-count',
+  REPORT_ONE: (id: string) => `/reports/${id}`,
+
   // App-wide settings (Ramadan mode)
   SETTINGS: '/settings',
   RAMADAN_STATUS: '/settings/ramadan',

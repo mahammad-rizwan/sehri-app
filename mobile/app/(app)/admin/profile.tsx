@@ -61,6 +61,20 @@ export default function AdminProfile() {
           </View>
         </LinearGradient>
 
+        {/* Chat messages an admin has reported, and the outcome */}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/my-reports' as any)}
+          style={styles.linkRow}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 18 }}>🚩</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.linkTitle}>My Reports</Text>
+            <Text style={styles.linkSub}>See the status of anything you reported</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+        </TouchableOpacity>
+
         <GoldButton
           title="Switch to User Mode 🔄"
           onPress={handleSwitchToUser}
@@ -94,6 +108,14 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: SIZES.spacing.sm, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   infoLabel: { color: COLORS.textMuted, fontSize: SIZES.sm, flex: 1 },
   infoValue: { color: COLORS.textPrimary, fontSize: SIZES.sm, fontWeight: '600' },
+  linkRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginTop: SIZES.spacing.md, padding: SIZES.spacing.md,
+    borderRadius: SIZES.radius.md, borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: COLORS.backgroundCard,
+  },
+  linkTitle: { color: COLORS.textPrimary, fontSize: 14, fontWeight: '700' },
+  linkSub: { color: COLORS.textMuted, fontSize: 11.5, marginTop: 2 },
   switchBtn: { marginTop: SIZES.spacing.md },
   logoutBtn: { marginTop: SIZES.spacing.md, borderColor: COLORS.accentRed },
 });

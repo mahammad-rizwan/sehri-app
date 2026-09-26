@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, LayoutChangeEvent, Platform } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { View, Text, StyleSheet, LayoutChangeEvent, Platform } from 'react-native';
+import MapView, { Marker, Polyline, Circle, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { COLORS } from '../../constants/theme';
 import { isExpoGo } from '../../utils/runtime';
 import {
@@ -9,6 +9,10 @@ import {
 } from '../../constants/mapData';
 import { fetchMapMarkers, fetchRoute, type MapMarkerRow, type DeliveryRoute } from '../../services/places';
 import { decodePolyline } from '../../utils/polyline';
+import { useFonts } from 'expo-font';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MapPin, PIN_ANCHOR } from './MapPin';
+import { RIDER_EMOJI } from '../../constants/mapData';
 
 /**
  * Android has no non-Google map provider, so PROVIDER_DEFAULT (undefined)
@@ -50,19 +54,12 @@ export default function DeliveryMap({
   const [latitudeDelta, setLatitudeDelta] = useState(DEFAULT_REGION.latitudeDelta);
   const [followRider, setFollowRider] = useState(true);
 
-  // Pulse behind the rider marker, so "live" reads at a glance.
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (!rider) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1900, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [rider, pulse]);
+  /**
+   * Metres of the attention ring drawn around the rider. A native map Circle,
+   * not part of the marker image, so it can never be clipped and it grows as
+   * the map is zoomed in — like Google's own location circle.
+   */
+  const RIDER_RING_M = 90;
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     setMapHeight(e.nativeEvent.layout.height || 400);
@@ -156,6 +153,13 @@ export default function DeliveryMap({
    * and tanks the frame rate. Clustering changes the marker set on zoom, so
    * each new set needs its own capture window.
    */
+  /**
+   * Pins are drawn with an icon font. Android snapshots each pin into a bitmap,
+   * so a snapshot taken before the font arrives is a blank circle forever. Load
+   * it up front and restart the capture window once it is in.
+   */
+  const [iconsReady] = useFonts(MaterialCommunityIcons.font);
+
   const [tracksChanges, setTracksChanges] = useState(true);
   const clusterKey = clustered.length;
 
@@ -163,7 +167,7 @@ export default function DeliveryMap({
     setTracksChanges(true);
     const t = setTimeout(() => setTracksChanges(false), 1200);
     return () => clearTimeout(t);
-  }, [clusterKey]);
+  }, [clusterKey, iconsReady]);
 
   /**
    * `initialRegion` is read once at mount, and the markers arrive after that,
@@ -202,25 +206,24 @@ export default function DeliveryMap({
         loadingBackgroundColor={COLORS.background}
         loadingIndicatorColor={COLORS.primary}
       >
-        {/* Delivery path, Zomato-style: a dark casing under a bright line so it
-            reads on any tile. Straight fallback is dashed to say "approximate". */}
+        {/* Delivery path in Google Maps navigation blue: a darker blue casing
+            under a bright blue line, solid either way — road-following or not. */}
         {path.points.length > 1 && (
           <>
             <Polyline
               coordinates={path.points}
-              strokeColor="rgba(0,0,0,0.55)"
-              strokeWidth={path.road ? 8 : 6}
+              strokeColor="#1A5DC8"
+              strokeWidth={9}
               lineCap="round"
               lineJoin="round"
               zIndex={1}
             />
             <Polyline
               coordinates={path.points}
-              strokeColor={COLORS.primary}
-              strokeWidth={path.road ? 4.5 : 3}
+              strokeColor="#4A8CFF"
+              strokeWidth={6}
               lineCap="round"
               lineJoin="round"
-              lineDashPattern={path.road ? undefined : [10, 8]}
               zIndex={2}
             />
           </>
@@ -237,44 +240,53 @@ export default function DeliveryMap({
               // no coordinates.
               title={grouped ? `${m.count} ${meta.label} points` : m.label}
               tracksViewChanges={tracksChanges}
+              // A pin points at its spot with its tip; a cluster sits centred.
+              anchor={grouped ? { x: 0.5, y: 0.5 } : PIN_ANCHOR}
             >
               {grouped ? (
                 <View style={[st.cluster, { backgroundColor: meta.color }]}>
                   <Text style={st.clusterTxt}>{m.count}</Text>
                 </View>
               ) : (
-                <View style={[st.pin, { backgroundColor: meta.color }]}>
-                  <Text style={st.pinEmoji}>{meta.emoji}</Text>
-                </View>
+                <MapPin symbol={m.symbol} />
               )}
             </Marker>
           );
         })}
 
         {rider && (
-          <Marker
-            coordinate={rider}
-            title="Live Rider"
-            anchor={{ x: 0.5, y: 0.5 }}
-            zIndex={999}
-            // The pulse animates, so this marker does need view tracking.
-            tracksViewChanges
-          >
-            <View style={st.riderWrap}>
-              <Animated.View
-                style={[
-                  st.riderRing,
-                  {
-                    opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.85, 0] }),
-                    transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.7] }) }],
-                  },
-                ]}
-              />
-              <View style={st.riderDot}>
-                <Text style={st.riderEmoji}>🛵</Text>
+          <>
+            <Circle
+              center={rider}
+              radius={RIDER_RING_M}
+              fillColor="rgba(76,175,80,0.18)"
+              strokeColor="rgba(76,175,80,0.75)"
+              strokeWidth={2}
+              zIndex={3}
+            />
+            <Marker
+              coordinate={rider}
+              title="Live Rider"
+              anchor={{ x: 0.5, y: 0.5 }}
+              zIndex={999}
+              /**
+               * Kept on. Freezing this marker's snapshot on the New Architecture
+               * produced a cropped image (a quarter of the disc). It is one
+               * static view, so tracking costs next to nothing now that the
+               * animated pulse is gone.
+               */
+              tracksViewChanges
+            >
+              {/* collapsable={false}: a layout-only wrapper is otherwise
+                  flattened away on Fabric, and the marker is then sized from
+                  the wrong child — the cause of the clipping. */}
+              <View style={st.riderWrap} collapsable={false}>
+                <View style={st.riderDot} collapsable={false}>
+                  <Text style={st.riderEmoji}>{RIDER_EMOJI}</Text>
+                </View>
               </View>
-            </View>
-          </Marker>
+            </Marker>
+          </>
         )}
       </MapView>
 
@@ -296,31 +308,29 @@ export default function DeliveryMap({
 
 const st = StyleSheet.create({
   wrap: { flex: 1, overflow: 'hidden', backgroundColor: COLORS.background },
-  pin: {
-    width: 30, height: 30, borderRadius: 15,
-    borderWidth: 2, borderColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  pinEmoji: { fontSize: 14 },
   cluster: {
     width: 30, height: 30, borderRadius: 15,
     borderWidth: 2, borderColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
   },
   clusterTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  riderWrap: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
-  riderRing: {
-    position: 'absolute',
-    width: 46, height: 46, borderRadius: 23,
-    borderWidth: 2, borderColor: MARKER_COLORS.rider,
-  },
+  // Bigger than the stop pins on purpose — it is the one thing that moves and
+  // the thing everyone opens the map to find.
+  // A little padding round the disc so its anti-aliased edge is never shaved.
+  riderWrap: { width: 60, height: 60, alignItems: 'center', justifyContent: 'center' },
   riderDot: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: MARKER_COLORS.rider,
-    borderWidth: 2.5, borderColor: '#fff',
+    width: 54, height: 54, borderRadius: 27,
+    backgroundColor: '#fff',
+    borderWidth: 3.5, borderColor: MARKER_COLORS.rider,
     alignItems: 'center', justifyContent: 'center',
   },
-  riderEmoji: { fontSize: 15 },
+  riderEmoji: {
+    fontSize: 30,
+    lineHeight: 36,
+    textAlign: 'center',
+    // Android pads emoji glyphs, which shoves them off-centre in a small disc.
+    ...(Platform.OS === 'android' ? { includeFontPadding: false, textAlignVertical: 'center' } : {}),
+  },
   recenter: {
     position: 'absolute',
     bottom: 14, alignSelf: 'center',

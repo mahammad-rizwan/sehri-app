@@ -13,6 +13,8 @@ import api from '../../../services/api';
 import { ENDPOINTS } from '../../../constants/api';
 import Toast from 'react-native-toast-message';
 import { connectSocket, listenNewMessage, listenDeleteMessage, getSocket, disconnectSocket } from '../../../services/socketService';
+import MessageActionSheet from '../../../components/content/MessageActionSheet';
+import ReportSheet from '../../../components/content/ReportSheet';
 
 interface ReplyTo {
   id: string;
@@ -226,10 +228,16 @@ export default function ChatScreen() {
     setReplyTo({ id: msg.id, message: msg.message, sender: msg.sender_name });
   };
 
-  // ─── Long press → delete ───
-  const handleLongPress = (msg: Message) => {
-    const canDelete = isSuperAdmin || (msg.sender_id === user?.id && msg.sender_type === activeRole);
-    if (!canDelete) return;
+  // ─── Long press → menu (Copy / Delete / Report) ───
+  const [menuFor, setMenuFor] = useState<Message | null>(null);
+  const [reportFor, setReportFor] = useState<Message | null>(null);
+
+  const handleLongPress = (msg: Message) => setMenuFor(msg);
+
+  const canDeleteMsg = (msg: Message) =>
+    isSuperAdmin || (msg.sender_id === user?.id && msg.sender_type === activeRole);
+
+  const confirmDelete = (msg: Message) => {
     const isOwn = msg.sender_id === user?.id;
     Alert.alert(
       'Delete Message',
@@ -481,6 +489,21 @@ export default function ChatScreen() {
           </View>
         </View>
       </Modal>
+
+      <MessageActionSheet
+        visible={!!menuFor}
+        text={menuFor?.message || ''}
+        onClose={() => setMenuFor(null)}
+        onDelete={menuFor && canDeleteMsg(menuFor) ? () => confirmDelete(menuFor) : undefined}
+        onReport={menuFor && menuFor.sender_id !== user?.id ? () => setReportFor(menuFor) : undefined}
+      />
+      <ReportSheet
+        visible={!!reportFor}
+        targetType="chat_message"
+        targetId={reportFor?.id || null}
+        preview={reportFor?.message || ''}
+        onClose={() => setReportFor(null)}
+      />
     </LinearGradient>
   );
 }

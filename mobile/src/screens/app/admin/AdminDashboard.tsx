@@ -13,6 +13,7 @@ import { IslamicGeometric, StarDivider } from '../../../components/ui/IslamicPat
 import api from '../../../services/api';
 import { ENDPOINTS } from '../../../constants/api';
 import { getUnreadBroadcastCount } from '../../../services/broadcastBadge';
+import { fetchPendingReports } from '../../../services/reports';
 import Toast from 'react-native-toast-message';
 import ExpoGoNotice from '../../../components/ui/ExpoGoNotice';
 
@@ -26,6 +27,7 @@ export default function AdminDashboard() {
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
   const [editRequests, setEditRequests] = useState(0);
   const [unreadBroadcasts, setUnreadBroadcasts] = useState(0);
+  const [pendingReports, setPendingReports] = useState(0);
   const [donationSummary, setDonationSummary] = useState<any>(null);
   const [pollActive, setPollActive] = useState<boolean | null>(null);
   const [pollToggling, setPollToggling] = useState(false);
@@ -56,6 +58,8 @@ export default function AdminDashboard() {
 
       // Admins receive announcements too — a super admin's post to their zone.
       getUnreadBroadcastCount().then(setUnreadBroadcasts).catch(() => {});
+      // Reports awaiting review — non-fatal, an older server simply shows none.
+      fetchPendingReports().then((c) => setPendingReports(c.total)).catch(() => setPendingReports(0));
       refreshSettings();
 
       setTomorrowStats(statsRes.data.data);
@@ -285,6 +289,7 @@ export default function AdminDashboard() {
                   color={ramadanActive ? COLORS.accentGreen : COLORS.primary}
                   onPress={() => router.push('/(app)/admin/ramadan' as any)}
                 />
+                <AdminAction icon="🚩" title="Reports" color={COLORS.accentRed} badge={pendingReports} onPress={() => router.push('/(app)/admin/reports' as any)} />
                 <AdminAction icon="📍" title="Zone & Map" color={COLORS.zonesStanza} onPress={() => router.push('/(app)/admin/places' as any)} />
                 <AdminAction icon="🔄" title="Sync Data" color={COLORS.accent} onPress={() => router.push('/(app)/admin/sync-data' as any)} />
               </>
@@ -293,6 +298,7 @@ export default function AdminDashboard() {
                 <AdminAction icon="👥" title="Zone Approvals" color={COLORS.accentOrange} badge={pendingUsers.length} onPress={() => router.push('/(app)/admin/users' as any)} />
                 <AdminAction icon="📝" title="Edit Requests" color={COLORS.accentOrange} badge={editRequests} onPress={() => router.push('/(app)/admin/profile-edit-requests' as any)} />
                 <AdminAction icon="📢" title="Broadcast" color={COLORS.accentPurple} badge={unreadBroadcasts} onPress={() => router.push('/(app)/admin/broadcast' as any)} />
+                <AdminAction icon="🚩" title="Reports" color={COLORS.accentRed} badge={pendingReports} onPress={() => router.push('/(app)/admin/reports' as any)} />
                 <AdminAction icon="💬" title="Feedback" color={COLORS.accent} onPress={() => router.push('/(app)/admin/feedback' as any)} />
                 {ramadanActive && (
                   <AdminAction icon="📅" title="Poll History" color={COLORS.primary} onPress={() => router.push('/(app)/admin/poll-history' as any)} />

@@ -15,6 +15,7 @@ const MapMarker = require('./MapMarker');
 const DeliveryAlert = require('./DeliveryAlert');
 const DeliveryRoute = require('./DeliveryRoute');
 const DeliveryStop = require('./DeliveryStop');
+const ContentReport = require('./ContentReport');
 const ProfileEditRequest = require('./ProfileEditRequest');
 const ChatGroup = require('./ChatGroup');
 const ChatGroupMember = require('./ChatGroupMember');
@@ -62,6 +63,7 @@ module.exports = {
   DeliveryAlert,
   DeliveryRoute,
   DeliveryStop,
+  ContentReport,
   ProfileEditRequest,
   ChatGroup,
   ChatGroupMember,

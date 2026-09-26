@@ -11,6 +11,7 @@ import api from '../../services/api';
 import { ENDPOINTS } from '../../constants/api';
 import DeliveryMap from '../../components/map/DeliveryMap';
 import { MAP_LEGEND } from '../../constants/mapData';
+import { SymbolBadge } from '../../components/map/MapPin';
 
 const POLL_MS   = 10000; // matches the rider's push interval
 
@@ -120,7 +121,8 @@ export default function TrackingScreen() {
         <View style={st.legend}>
           {MAP_LEGEND.map((l) => (
             <View key={l.key} style={st.legendItem}>
-              <View style={[st.legendDot, { backgroundColor: l.color }]} />
+              {/* Same glyph as the pin on the map, so the legend actually decodes it. */}
+              <SymbolBadge symbol={l.key as any} size={18} />
               <Text style={st.legendTxt}>{l.label}</Text>
             </View>
           ))}
@@ -147,7 +149,6 @@ const st = StyleSheet.create({
     paddingHorizontal: 4,
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 9, height: 9, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.65)' },
   legendTxt: { color: COLORS.textMuted, fontSize: 10.5 },
   root:    { flex: 1, backgroundColor: '#050D16' },
 

@@ -224,6 +224,18 @@ async function ensureSchema() {
     logger.error(`ensureSchema: delivery_routes/stops step failed — ${err.message}`);
   }
 
+  // ── content_reports (announcement + chat reports) ────────────────────────
+  try {
+    const tables = await qi.showAllTables();
+    const names = tables.map((t) => (typeof t === 'string' ? t : t.tableName).toLowerCase());
+    if (!names.includes('content_reports')) {
+      await require('../models/ContentReport').sync();
+      applied.push('created table content_reports');
+    }
+  } catch (err) {
+    logger.error(`ensureSchema: content_reports step failed — ${err.message}`);
+  }
+
   if (applied.length) {
     logger.info(`🔧 Schema updated on boot: ${applied.join('; ')}`);
   } else {

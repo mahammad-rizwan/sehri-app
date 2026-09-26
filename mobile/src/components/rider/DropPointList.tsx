@@ -5,7 +5,8 @@ import { useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { COLORS, SIZES } from '../../constants/theme';
 import { API_BASE_URL } from '../../constants/api';
-import { SYMBOL_META, type MapSymbol } from '../../constants/mapData';
+import { type MapSymbol } from '../../constants/mapData';
+import { SymbolBadge } from '../map/MapPin';
 
 type Stop = {
   id: string;
@@ -244,7 +245,7 @@ export default function DropPointList() {
             <View style={st.nextCard}>
               <Text style={st.nextTag}>NEXT STOP · #{next.position}</Text>
               <View style={st.nextRow}>
-                <Text style={st.nextEmoji}>{SYMBOL_META[next.symbol]?.emoji || '📍'}</Text>
+                <SymbolBadge symbol={next.symbol} size={34} />
                 <View style={{ flex: 1 }}>
                   <Text style={st.nextLabel} numberOfLines={2}>{next.label}</Text>
                   <Text style={st.nextMode}>
@@ -337,7 +338,6 @@ const st = StyleSheet.create({
   },
   nextTag: { color: COLORS.primary, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6 },
   nextRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  nextEmoji: { fontSize: 24 },
   nextLabel: { color: COLORS.textPrimary, fontSize: 15, fontWeight: '700' },
   nextMode: { color: COLORS.textSecondary, fontSize: 11.5, marginTop: 2 },
   countBig: { alignItems: 'center', minWidth: 52 },

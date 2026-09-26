@@ -204,6 +204,22 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
         </TouchableOpacity>
 
+        {/* What they have reported, and the outcome */}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/my-reports' as any)}
+          style={styles.feedbackRow}
+          activeOpacity={0.7}
+        >
+          <View style={styles.feedbackIcon}>
+            <Text style={{ fontSize: 18 }}>🚩</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>My Reports</Text>
+            <Text style={styles.feedbackSub}>See the status of anything you reported</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+        </TouchableOpacity>
+
         {/* Request profile changes — needs admin approval */}
         <GoldButton
           title="Request Profile Edit ✏️"

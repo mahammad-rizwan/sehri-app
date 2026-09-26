@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, Alert, RefreshControl, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, RefreshControl, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,12 +11,16 @@ import api from '../../../src/services/api';
 import { ENDPOINTS } from '../../../src/constants/api';
 import { useAuthStore } from '../../../src/store/authStore';
 import { markBroadcastsSeen } from '../../../src/services/broadcastBadge';
+import MessageActionSheet from '../../../src/components/content/MessageActionSheet';
+import ReportSheet from '../../../src/components/content/ReportSheet';
 
 type Sent = {
   id: string; zones: string[]; body: string; links: string[];
   sender_name: string; sender_role: 'admin' | 'super_admin'; created_at: string;
   /** Server-decided: super admins may delete anything, admins only their own. */
   can_delete?: boolean;
+  /** Your own post — Report is not offered on it. */
+  is_mine?: boolean;
 };
 
 const MAX = 2000;
@@ -35,6 +39,8 @@ export default function AdminBroadcast() {
   const [sent, setSent] = useState<Sent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [menuFor, setMenuFor] = useState<Sent | null>(null);
+  const [reportFor, setReportFor] = useState<Sent | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -241,7 +247,12 @@ export default function AdminBroadcast() {
             <Text style={st.hint}>Nothing sent yet.</Text>
           ) : (
             sent.map((m) => (
-              <View key={m.id} style={st.sentCard}>
+              <Pressable
+                key={m.id}
+                style={({ pressed }) => [st.sentCard, pressed && { opacity: 0.85 }]}
+                onLongPress={() => setMenuFor(m)}
+                delayLongPress={350}
+              >
                 <View style={st.sentTop}>
                   {/* Staff still see the audience — they need to check what
                       went where. Readers never do. */}
@@ -250,11 +261,9 @@ export default function AdminBroadcast() {
                       .map((z) => (ZONE_CONFIG as any)[z]?.label || z)
                       .join(' · ') || 'Announcement'}
                   </Text>
-                  {m.can_delete && (
-                    <TouchableOpacity onPress={() => remove(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                      <Ionicons name="trash-outline" size={15} color={COLORS.accentRed} />
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity onPress={() => setMenuFor(m)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="ellipsis-vertical" size={16} color={COLORS.textMuted} />
+                  </TouchableOpacity>
                 </View>
                 <Text style={st.sentBody} numberOfLines={4}>{m.body}</Text>
                 {m.links.length > 0 && (
@@ -265,11 +274,26 @@ export default function AdminBroadcast() {
                     day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
                   })}
                 </Text>
-              </View>
+              </Pressable>
             ))
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <MessageActionSheet
+        visible={!!menuFor}
+        text={menuFor?.body || ''}
+        onClose={() => setMenuFor(null)}
+        onDelete={menuFor?.can_delete ? () => remove(menuFor) : undefined}
+        onReport={menuFor && !menuFor.is_mine ? () => setReportFor(menuFor) : undefined}
+      />
+      <ReportSheet
+        visible={!!reportFor}
+        targetType="broadcast"
+        targetId={reportFor?.id || null}
+        preview={reportFor?.body || ''}
+        onClose={() => setReportFor(null)}
+      />
     </LinearGradient>
   );
 }
